@@ -32,7 +32,8 @@ import {
   Building2, Briefcase, Users, Shield, Heart, ArrowRight, Menu,
   Plus, Minus, Edit, Trash2, Ban, Check, X, RefreshCw, Loader2,
   Sparkles, ShieldCheck, TrendingUp, FileText, Image, ThumbsUp,
-  MoreVertical, Lock, Key, Copy, ExternalLink, Store, Wrench
+  MoreVertical, Lock, Key, Copy, ExternalLink, Store, Wrench,
+  Smartphone, ChevronDown, IdCard, UserCheck, Filter, Zap, Download
 } from 'lucide-react'
 
 // ============================================================
@@ -263,6 +264,17 @@ export default function VServiceRDC() {
       void fetchUserProfile()
     }
   }, [token, user])
+
+  // Show onboarding for new users
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [onboardingStep, setOnboardingStep] = useState(0)
+
+  useEffect(() => {
+    if (user && typeof window !== 'undefined' && !localStorage.getItem('vservicerdc_onboarded')) {
+      const timer = setTimeout(() => setShowOnboarding(true), 500)
+      return () => clearTimeout(timer)
+    }
+  }, [user])
 
   const logout = () => {
     localStorage.removeItem('vservicerdc_token')
@@ -1070,6 +1082,34 @@ export default function VServiceRDC() {
             Se connecter
           </Button>
         </div>
+
+        {/* Download mobile button */}
+        <div className="mt-8">
+          <Button
+            variant="outline"
+            className="gap-2 border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-700 px-6 py-3"
+            onClick={() => {
+              if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+                // Try PWA install prompt
+                const deferredPrompt = (window as any).deferredPWAInstall
+                if (deferredPrompt) {
+                  deferredPrompt.prompt()
+                  return
+                }
+              }
+              // Fallback: add to homescreen instructions
+              toast({
+                title: 'Installer VServiceRDC',
+                description: 'Sur mobile : appuyez sur "Partager" puis "Ajouter à l\'écran d\'accueil". Sur PC : utilisez le menu du navigateur > "Installer l\'application".',
+                duration: 8000,
+              })
+            }}
+          >
+            <Smartphone className="h-5 w-5" />
+            Télécharger la version mobile
+            <Download className="h-4 w-4" />
+          </Button>
+        </div>
       </section>
 
       {/* Features */}
@@ -1740,6 +1780,15 @@ export default function VServiceRDC() {
   const [suspendReason, setSuspendReason] = useState('')
   const [adminLoading, setAdminLoading] = useState(false)
 
+  // User detail dialog
+  const [userDetailOpen, setUserDetailOpen] = useState(false)
+  const [userDetailData, setUserDetailData] = useState<any>(null)
+
+  const viewUserDetail = (u: any) => {
+    setUserDetailData(u)
+    setUserDetailOpen(true)
+  }
+
   // Announcement state
   const [annTitle, setAnnTitle] = useState('')
   const [annMessage, setAnnMessage] = useState('')
@@ -1992,7 +2041,7 @@ export default function VServiceRDC() {
             <Card>
               <CardHeader>
                 <CardTitle>Gestion des utilisateurs</CardTitle>
-                <CardDescription>Filtrez et gérez tous les comptes</CardDescription>
+                <CardDescription>Cliquez sur un utilisateur pour voir ses informations complètes</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3 mb-4">
@@ -2016,43 +2065,72 @@ export default function VServiceRDC() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
-                  {adminUsers.map(u => (
-                    <div key={u.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Avatar className="h-10 w-10 flex-shrink-0">
-                          <AvatarFallback className="bg-emerald-50 text-emerald-700 text-xs">{getInitials(u.profile?.fullName || u.profile?.companyName || 'U')}</AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm truncate">{u.profile?.companyName || u.profile?.fullName || u.phone}</p>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500">{u.role}</span>
-                            {getStatusBadge(u.status)}
+                <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
+                  {adminUsers.map(u => {
+                    const displayName = u.profile?.companyName || u.profile?.fullName || 'Sans nom'
+                    const displayPhone = u.phone
+                    const displayEmail = u.email || ''
+                    return (
+                      <div key={u.id} className="cursor-pointer p-3 rounded-lg border border-gray-100 hover:border-emerald-300 hover:bg-emerald-50/30 transition-all" onClick={() => viewUserDetail(u)}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <Avatar className="h-11 w-11 flex-shrink-0 ring-2 ring-emerald-100">
+                              <AvatarImage src={u.profile?.logo || u.profile?.photo} />
+                              <AvatarFallback className="bg-emerald-50 text-emerald-700 text-xs font-bold">{getInitials(displayName)}</AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm text-gray-900 truncate">{displayName}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-xs text-gray-500 flex items-center gap-1"><Phone className="h-3 w-3" />{displayPhone}</span>
+                                {displayEmail && <span className="text-xs text-gray-500 hidden sm:inline">• {displayEmail}</span>}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{u.role}</Badge>
+                                {getStatusBadge(u.status)}
+                                {u.profile?.sector && <span className="text-[10px] text-gray-400">{u.profile.sector}</span>}
+                                {u.profile?.province && <span className="text-[10px] text-gray-400 flex items-center gap-0.5"><MapPin className="h-2.5 w-2.5" />{u.profile.province}</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm"><MoreVertical className="h-4 w-4" /></Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => viewUserDetail(u)}>
+                                  <IdCard className="h-4 w-4 mr-2 text-emerald-600" /> Voir détails
+                                </DropdownMenuItem>
+                                {u.status === 'suspended' && (
+                                  <DropdownMenuItem onClick={() => handleAdminAction(u.id, 'activate')}>
+                                    <CheckCircle className="h-4 w-4 mr-2 text-emerald-600" /> Activer
+                                  </DropdownMenuItem>
+                                )}
+                                {u.status === 'pending' && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleAdminAction(u.id, 'approve')}>
+                                      <CheckCircle className="h-4 w-4 mr-2 text-emerald-600" /> Approuver
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleAdminAction(u.id, 'reject')}>
+                                      <XCircle className="h-4 w-4 mr-2 text-red-600" /> Rejeter
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {u.status !== 'suspended' && u.status !== 'pending' && (
+                                  <DropdownMenuItem onClick={() => { setSuspendUserId(u.id); setSuspendDialogOpen(true) }}>
+                                    <Ban className="h-4 w-4 mr-2 text-amber-600" /> Suspendre
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onClick={() => handleDeleteUser(u.id)} className="text-red-600">
+                                  <Trash2 className="h-4 w-4 mr-2" /> Supprimer
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </div>
                       </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm"><MoreVertical className="h-4 w-4" /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {u.status === 'suspended' && (
-                            <DropdownMenuItem onClick={() => handleAdminAction(u.id, 'activate')}>
-                              <CheckCircle className="h-4 w-4 mr-2 text-emerald-600" /> Activer
-                            </DropdownMenuItem>
-                          )}
-                          {u.status !== 'suspended' && u.status !== 'pending' && (
-                            <DropdownMenuItem onClick={() => { setSuspendUserId(u.id); setSuspendDialogOpen(true) }}>
-                              <Ban className="h-4 w-4 mr-2 text-amber-600" /> Suspendre
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem onClick={() => handleDeleteUser(u.id)} className="text-red-600">
-                            <Trash2 className="h-4 w-4 mr-2" /> Supprimer
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  ))}
+                    )
+                  })}
                   {adminUsers.length === 0 && <p className="text-center text-gray-400 py-8">Aucun utilisateur trouvé</p>}
                 </div>
               </CardContent>
@@ -2190,6 +2268,233 @@ export default function VServiceRDC() {
             <Button variant="outline" onClick={() => setSuspendDialogOpen(false)}>Annuler</Button>
             <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => { handleAdminAction(suspendUserId, 'suspend', suspendReason); setSuspendDialogOpen(false); setSuspendReason('') }}>
               Suspendre
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* User detail dialog */}
+      <Dialog open={userDetailOpen} onOpenChange={setUserDetailOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <IdCard className="h-5 w-5 text-emerald-600" />
+              Détails de l'utilisateur
+            </DialogTitle>
+            <DialogDescription>Informations complètes du compte</DialogDescription>
+          </DialogHeader>
+          {userDetailData && (
+            <div className="space-y-4 py-2">
+              {/* Profile header */}
+              <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16 ring-4 ring-emerald-100">
+                  <AvatarImage src={userDetailData.profile?.logo || userDetailData.profile?.photo} />
+                  <AvatarFallback className="bg-emerald-50 text-emerald-700 text-lg font-bold">
+                    {getInitials(userDetailData.profile?.companyName || userDetailData.profile?.fullName || 'U')}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="font-bold text-lg text-gray-900">
+                    {userDetailData.profile?.companyName || userDetailData.profile?.fullName || 'Sans nom'}
+                  </h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant="secondary">{userDetailData.role}</Badge>
+                    {getStatusBadge(userDetailData.status)}
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* ID */}
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-gray-50">
+                <Key className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-gray-500 font-medium">ID Utilisateur</p>
+                  <p className="text-sm font-mono text-gray-800 break-all select-all">{userDetailData.id}</p>
+                </div>
+              </div>
+
+              {/* Coordinates */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-1">
+                  <User className="h-4 w-4" /> Coordonnées
+                </h4>
+                <div className="space-y-2 pl-1">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="h-4 w-4 text-gray-400" />
+                    <span className="text-gray-700">{userDetailData.phone}</span>
+                  </div>
+                  {userDetailData.email && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mail className="h-4 w-4 text-gray-400" />
+                      <span className="text-gray-700">{userDetailData.email}</span>
+                    </div>
+                  )}
+                  {userDetailData.profile?.province && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <MapPin className="h-4 w-4 text-gray-400" />
+                      <span className="text-gray-700">
+                        {userDetailData.profile.province}
+                        {userDetailData.profile.commune ? `, ${userDetailData.profile.commune}` : ''}
+                        {userDetailData.profile.nationalScope ? ' (Portée nationale)' : ''}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Professional info */}
+              {(userDetailData.role === 'PRESTATAIRE' || userDetailData.role === 'ENTREPRISE') && userDetailData.profile && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-1">
+                      <Briefcase className="h-4 w-4" /> Informations professionnelles
+                    </h4>
+                    <div className="space-y-2 pl-1">
+                      {userDetailData.profile.sector && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Briefcase className="h-4 w-4 text-gray-400" />
+                          <span className="text-gray-700">Secteur : <strong>{userDetailData.profile.sector}</strong></span>
+                        </div>
+                      )}
+                      {userDetailData.profile.services && userDetailData.profile.services.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {userDetailData.profile.services.map((s: string) => (
+                            <Badge key={s} variant="secondary" className="bg-emerald-50 text-emerald-700">{s}</Badge>
+                          ))}
+                        </div>
+                      )}
+                      {userDetailData.profile.description && (
+                        <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">{userDetailData.profile.description}</p>
+                      )}
+                      {userDetailData.profile.website && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Globe className="h-4 w-4 text-gray-400" />
+                          <span className="text-emerald-600">{userDetailData.profile.website}</span>
+                        </div>
+                      )}
+                      {userDetailData.profile.companyType && (
+                        <div className="text-sm text-gray-600">
+                          Type : <strong>{userDetailData.profile.companyType === 'individuelle' ? 'Individuelle' : 'Avec employés'}</strong>
+                          {userDetailData.profile.employeeCount ? ` — ${userDetailData.profile.employeeCount} employé(s)` : ''}
+                        </div>
+                      )}
+                      {userDetailData.profile.fullAddress && (
+                        <div className="text-sm text-gray-600">
+                          Adresse : {userDetailData.profile.fullAddress}
+                        </div>
+                      )}
+                      {userDetailData.profile.socialMedia && Object.keys(userDetailData.profile.socialMedia).length > 0 && (
+                        <div className="space-y-1">
+                          {Object.entries(userDetailData.profile.socialMedia).map(([platform, url]) => (
+                            <div key={platform} className="text-sm text-gray-600 flex items-center gap-2">
+                              <Globe className="h-3 w-3 text-gray-400" />
+                              <span className="capitalize">{platform}</span>: <span className="text-emerald-600">{String(url)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <Separator />
+
+              {/* Account info */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-1">
+                  <Shield className="h-4 w-4" /> Informations du compte
+                </h4>
+                <div className="text-sm text-gray-600 space-y-1">
+                  <p>Inscrit le : {userDetailData.createdAt ? formatDate(userDetailData.createdAt) : 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Onboarding dialog */}
+      <Dialog open={showOnboarding} onOpenChange={(v) => { setShowOnboarding(v); if (!v) { localStorage.setItem('vservicerdc_onboarded', '1'); setOnboardingStep(0) } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-700">
+              <Sparkles className="h-5 w-5" />
+              {onboardingStep === 0 && 'Bienvenue sur VServiceRDC !'}
+              {onboardingStep === 1 && 'Recherchez des services'}
+              {onboardingStep === 2 && 'Laissez des avis'}
+              {onboardingStep === 3 && 'Restez connecté'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {onboardingStep === 0 && (
+              <div className="text-center space-y-4">
+                <div className="w-20 h-20 mx-auto rounded-full bg-emerald-50 flex items-center justify-center">
+                  <img src="/logo.png" alt="VServiceRDC" className="h-14 w-auto" />
+                </div>
+                <p className="text-gray-600">
+                  VServiceRDC est la première plateforme de mise en relation entre <strong>clients</strong>, <strong>prestataires</strong> et <strong>entreprises</strong> en République Démocratique du Congo.
+                </p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  <Badge className="bg-emerald-100 text-emerald-700">Recherche</Badge>
+                  <Badge className="bg-emerald-100 text-emerald-700">Avis & Notes</Badge>
+                  <Badge className="bg-emerald-100 text-emerald-700">Notifications</Badge>
+                  <Badge className="bg-emerald-100 text-emerald-700">Prestataires vérifiés</Badge>
+                </div>
+              </div>
+            )}
+            {onboardingStep === 1 && (
+              <div className="text-center space-y-4">
+                <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 flex items-center justify-center">
+                  <Search className="h-8 w-8 text-emerald-600" />
+                </div>
+                <p className="text-gray-600">
+                  Utilisez les <strong>filtres</strong> pour trouver des prestataires par <strong>province</strong>, <strong>commune</strong>, <strong>secteur d'activité</strong> ou <strong>service</strong>. Parcourez les profils et consultez les avis avant de choisir.
+                </p>
+              </div>
+            )}
+            {onboardingStep === 2 && (
+              <div className="text-center space-y-4">
+                <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 flex items-center justify-center">
+                  <Star className="h-8 w-8 text-amber-500" />
+                </div>
+                <p className="text-gray-600">
+                  Après un service, <strong>notez le prestataire</strong> de 1 à 5 étoiles et laissez un commentaire. Cela aide toute la communauté à faire les meilleurs choix !
+                </p>
+              </div>
+            )}
+            {onboardingStep === 3 && (
+              <div className="text-center space-y-4">
+                <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 flex items-center justify-center">
+                  <Bell className="h-8 w-8 text-emerald-600" />
+                </div>
+                <p className="text-gray-600">
+                  Activez les <strong>notifications</strong> pour recevoir des alertes, des réponses de l'admin, et des annonces. Vous pouvez aussi contacter l'équipe <strong>HenoBuild</strong> depuis les paramètres.
+                </p>
+                <p className="text-sm text-emerald-600 font-medium">Vous pouvez installer l'app sur votre téléphone !</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <div className="flex gap-2 w-full">
+              {onboardingStep > 0 && (
+                <Button variant="outline" className="flex-1" onClick={() => setOnboardingStep(s => s - 1)}>Précédent</Button>
+              )}
+              {onboardingStep < 3 ? (
+                <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setOnboardingStep(s => s + 1)}>
+                  Suivant <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              ) : (
+                <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setShowOnboarding(false); localStorage.setItem('vservicerdc_onboarded', '1'); setOnboardingStep(0) }}>
+                  <Check className="h-4 w-4 mr-1" /> C'est parti !
+                </Button>
+              )}
+            </div>
+            <Button variant="ghost" size="sm" className="text-gray-400" onClick={() => { setShowOnboarding(false); localStorage.setItem('vservicerdc_onboarded', '1'); setOnboardingStep(0) }}>
+              Passer le tutoriel
             </Button>
           </DialogFooter>
         </DialogContent>
