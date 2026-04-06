@@ -344,6 +344,14 @@ export default function VServiceRDC() {
         if (res.ok) {
           localStorage.setItem('vservicerdc_token', data.token)
           setToken(data.token)
+          // Directly set user and navigate - don't rely on useEffect
+          setUser({
+            id: data.user.id,
+            phone: data.user.phone,
+            role: 'ADMIN' as AccountType,
+            status: data.user.status,
+          })
+          navigate('admin-dashboard')
           toast({ title: 'Connexion admin réussie', description: 'Bienvenue dans l\'espace administrateur !' })
         } else {
           toast({ title: 'Erreur', description: data.error || 'Mot de passe administrateur incorrect.', variant: 'destructive' })
@@ -371,6 +379,20 @@ export default function VServiceRDC() {
       if (res.ok) {
         localStorage.setItem('vservicerdc_token', data.token)
         setToken(data.token)
+        // Directly set user and navigate based on role
+        const role = (data.user.role || 'CLIENT') as AccountType
+        setUser({
+          id: data.user.id,
+          phone: data.user.phone,
+          email: data.user.email,
+          role,
+          status: data.user.status,
+          profile: data.user.clientProfile || data.user.providerProfile || data.user.companyProfile ? undefined : undefined,
+        })
+        if (role === 'ADMIN') navigate('admin-dashboard')
+        else if (role === 'CLIENT') navigate('client-dashboard')
+        else if (role === 'PRESTATAIRE') navigate('prestataire-dashboard')
+        else if (role === 'ENTREPRISE') navigate('entreprise-dashboard')
         toast({ title: 'Connexion réussie', description: 'Bienvenue sur VServiceRDC !' })
       } else {
         toast({ title: 'Erreur de connexion', description: data.message || data.error || 'Identifiants incorrects.', variant: 'destructive' })

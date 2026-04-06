@@ -1,39 +1,32 @@
-import { v4 as uuidv4 } from 'uuid';
-
-// Simple session store (in-memory for this app)
-const sessions = new Map<string, { userId: string; role: string; expiresAt: number }>();
+// Stateless session tokens - no server-side storage needed
+// Token is a base64 encoded JSON with userId, role, and expiration
 
 const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export function createSession(userId: string, role: string): string {
-  const token = uuidv4();
-  sessions.set(token, {
-    userId,
-    role,
-    expiresAt: Date.now() + SESSION_DURATION,
+  const payload = JSON.stringify({
+    u: userId,
+    r: role,
+    e: Date.now() + SESSION_DURATION,
   });
-  return token;
+  return Buffer.from(payload).toString('base64url');
 }
 
 export function getSession(token: string): { userId: string; role: string } | null {
-  const session = sessions.get(token);
-  if (!session) return null;
-  if (Date.now() > session.expiresAt) {
-    sessions.delete(token);
+  try {
+    const decoded = Buffer.from(token, 'base64url').toString('utf-8');
+    const data = JSON.parse(decoded);
+    if (Date.now() > data.e) return null;
+    return { userId: data.u, role: data.r };
+  } catch {
     return null;
   }
-  return { userId: session.userId, role: session.role };
 }
 
-export function deleteSession(token: string): void {
-  sessions.delete(token);
+export function deleteSession(_token: string): void {
+  // Stateless - nothing to delete
 }
 
 export function cleanExpiredSessions(): void {
-  const now = Date.now();
-  for (const [token, session] of sessions.entries()) {
-    if (now > session.expiresAt) {
-      sessions.delete(token);
-    }
-  }
+  // Stateless - nothing to clean
 }
