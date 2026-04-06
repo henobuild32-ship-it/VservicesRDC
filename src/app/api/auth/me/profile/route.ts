@@ -24,6 +24,7 @@ export async function PUT(req: NextRequest) {
     }
 
     if (session.role === 'PRESTATAIRE') {
+      const serviceValue = Array.isArray(body.services) ? (body.services[0] || '') : (body.service || '');
       await db.providerProfile.upsert({
         where: { userId: session.userId },
         create: {
@@ -32,7 +33,7 @@ export async function PUT(req: NextRequest) {
           email: body.email,
           phone: body.phone,
           sector: body.sector,
-          service: body.service,
+          service: serviceValue,
           province: body.province,
           commune: body.commune,
           description: body.description,
@@ -44,7 +45,7 @@ export async function PUT(req: NextRequest) {
           email: body.email,
           phone: body.phone,
           sector: body.sector,
-          service: body.service,
+          service: serviceValue,
           province: body.province,
           commune: body.commune,
           description: body.description,
@@ -52,6 +53,9 @@ export async function PUT(req: NextRequest) {
           nationalScope: body.nationalScope || false,
         },
       });
+      if (body.email) {
+        await db.user.update({ where: { id: session.userId }, data: { email: body.email } });
+      }
       return NextResponse.json({ success: true });
     }
 
@@ -100,7 +104,7 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-// Admin password change
+// Password change for all users
 export async function PATCH(req: NextRequest) {
   try {
     const token = req.headers.get('authorization')?.replace('Bearer ', '');
@@ -109,8 +113,8 @@ export async function PATCH(req: NextRequest) {
     if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 
     const body = await req.json();
-    if (session.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
+    if (!body.newPassword || body.newPassword.length < 6) {
+      return NextResponse.json({ error: 'Mot de passe trop court (min 6 caractères)' }, { status: 400 });
     }
 
     await db.user.update({

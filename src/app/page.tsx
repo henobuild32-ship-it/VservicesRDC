@@ -43,7 +43,7 @@ type ViewName = 'landing' | 'login' | 'register' | 'client-dashboard' | 'provide
   'prestataire-dashboard' | 'entreprise-dashboard' | 'admin-dashboard' |
   'notifications' | 'settings' | 'profile-edit'
 
-type AccountType = 'CLIENT' | 'PRESTATAIRE' | 'ENTREPRISE'
+type AccountType = 'CLIENT' | 'PRESTATAIRE' | 'ENTREPRISE' | 'ADMIN'
 
 interface UserProfile {
   id: string
@@ -230,9 +230,18 @@ export default function VServiceRDC() {
       const res = await fetch('/api/auth/me', { headers: authHeaders() })
       if (res.ok) {
         const data = await res.json()
-        setUser(data)
+        // API now returns flat structure with profile field
+        const userData: UserProfile = {
+          id: data.id,
+          phone: data.phone,
+          email: data.email,
+          role: data.role,
+          status: data.status,
+          profile: data.profile || undefined,
+        }
+        setUser(userData)
         // Navigate to appropriate dashboard
-        const role = data.role as AccountType
+        const role = data.role as string
         if (role === 'ADMIN') navigate('admin-dashboard')
         else if (role === 'CLIENT') navigate('client-dashboard')
         else if (role === 'PRESTATAIRE') navigate('prestataire-dashboard')
@@ -1131,17 +1140,17 @@ export default function VServiceRDC() {
       const res = await fetch(`/api/providers?userId=${providerId}`, { headers: authHeaders() })
       if (res.ok) {
         const data = await res.json()
-        setProviderDetail(data.user || data)
+        // API returns flat structure with profile field
+        setProviderDetail({
+          id: data.id,
+          phone: data.phone,
+          role: data.role,
+          status: data.status,
+          profile: data.profile,
+        })
         setAvgRating(data.avgRating || 0)
         setReviewCount(data.reviewCount || 0)
         setProviderReviews(data.reviews || [])
-        // Fetch more reviews
-        const revRes = await fetch(`/api/reviews?targetId=${providerId}`)
-        if (revRes.ok) {
-          const revData = await revRes.json()
-          if (Array.isArray(revData)) setProviderReviews(revData)
-          else setProviderReviews(revData.reviews || revData || [])
-        }
         navigate('provider-detail', { providerId })
       }
     } catch { /* silent */ }
@@ -2525,7 +2534,15 @@ export default function VServiceRDC() {
         const meRes = await fetch('/api/auth/me', { headers: authHeaders() })
         if (meRes.ok) {
           const meData = await meRes.json()
-          setUser(meData)
+          const refreshedUser: UserProfile = {
+            id: meData.id,
+            phone: meData.phone,
+            email: meData.email,
+            role: meData.role,
+            status: meData.status,
+            profile: meData.profile || undefined,
+          }
+          setUser(refreshedUser)
         }
         navigate(user.role === 'PRESTATAIRE' ? 'prestataire-dashboard' : 'entreprise-dashboard')
       } else {

@@ -35,14 +35,14 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       totalUsers,
-      totalClients,
-      totalPrestataires,
-      totalEntreprises,
-      pendingUsers,
-      approvedUsers,
-      suspendedUsers,
-      totalReviews,
-      totalMessages,
+      clients: totalClients,
+      prestataires: totalPrestataires,
+      entreprises: totalEntreprises,
+      pending: pendingUsers,
+      approved: approvedUsers,
+      suspended: suspendedUsers,
+      reviews: totalReviews,
+      messages: totalMessages,
       unreadMessages,
     });
   } catch (error) {

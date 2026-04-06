@@ -2,6 +2,55 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/session';
 
+function mapUserProfile(user: any) {
+  if (user.role === 'CLIENT' && user.clientProfile) {
+    return {
+      fullName: user.clientProfile.fullName || null,
+    };
+  }
+  if (user.role === 'PRESTATAIRE' && user.providerProfile) {
+    const pp = user.providerProfile;
+    let socialMedia = null;
+    if (pp.socialMedia) {
+      try { socialMedia = JSON.parse(pp.socialMedia); } catch { socialMedia = null; }
+    }
+    return {
+      fullName: pp.fullName || null,
+      photo: pp.photoUrl || null,
+      sector: pp.sector || null,
+      services: pp.service ? [pp.service] : [],
+      province: pp.province || null,
+      commune: pp.commune || null,
+      nationalScope: pp.nationalScope || false,
+      description: pp.description || null,
+      socialMedia,
+    };
+  }
+  if (user.role === 'ENTREPRISE' && user.companyProfile) {
+    const cp = user.companyProfile;
+    let services: string[] = [];
+    if (cp.services) {
+      try { services = JSON.parse(cp.services); } catch { services = []; }
+    }
+    let socialMedia = null;
+    if (cp.socialMedia) {
+      try { socialMedia = JSON.parse(cp.socialMedia); } catch { socialMedia = null; }
+    }
+    return {
+      companyName: cp.companyName || null,
+      logo: cp.logoUrl || null,
+      coverPhoto: cp.coverPhotoUrl || null,
+      sector: cp.sector || null,
+      services,
+      province: cp.province || null,
+      commune: cp.commune || null,
+      nationalScope: cp.nationalScope || false,
+      socialMedia,
+    };
+  }
+  return {};
+}
+
 export async function GET(req: NextRequest) {
   try {
     const token = req.headers.get('authorization')?.replace('Bearer ', '');
@@ -28,7 +77,17 @@ export async function GET(req: NextRequest) {
       take: 200,
     });
 
-    return NextResponse.json({ users });
+    const mappedUsers = users.map(u => ({
+      id: u.id,
+      phone: u.phone,
+      email: u.email,
+      role: u.role,
+      status: u.status,
+      createdAt: u.createdAt,
+      profile: mapUserProfile(u),
+    }));
+
+    return NextResponse.json({ users: mappedUsers });
   } catch (error) {
     console.error('Admin users error:', error);
     return NextResponse.json({ error: 'Erreur' }, { status: 500 });

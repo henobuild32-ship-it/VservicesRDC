@@ -2,6 +2,57 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/session';
 
+function mapProfile(user: any) {
+  if (user.role === 'CLIENT') {
+    return {
+      fullName: user.clientProfile?.fullName || null,
+    };
+  }
+  if (user.role === 'PRESTATAIRE') {
+    let socialMedia = null;
+    if (user.providerProfile?.socialMedia) {
+      try { socialMedia = JSON.parse(user.providerProfile.socialMedia); } catch { socialMedia = null; }
+    }
+    return {
+      fullName: user.providerProfile?.fullName || null,
+      photo: user.providerProfile?.photoUrl || null,
+      sector: user.providerProfile?.sector || null,
+      services: user.providerProfile?.service ? [user.providerProfile.service] : [],
+      province: user.providerProfile?.province || null,
+      commune: user.providerProfile?.commune || null,
+      nationalScope: user.providerProfile?.nationalScope || false,
+      description: user.providerProfile?.description || null,
+      socialMedia,
+    };
+  }
+  if (user.role === 'ENTREPRISE') {
+    let services = [];
+    if (user.companyProfile?.services) {
+      try { services = JSON.parse(user.companyProfile.services); } catch { services = []; }
+    }
+    let socialMedia = null;
+    if (user.companyProfile?.socialMedia) {
+      try { socialMedia = JSON.parse(user.companyProfile.socialMedia); } catch { socialMedia = null; }
+    }
+    return {
+      companyName: user.companyProfile?.companyName || null,
+      logo: user.companyProfile?.logoUrl || null,
+      coverPhoto: user.companyProfile?.coverPhotoUrl || null,
+      sector: user.companyProfile?.sector || null,
+      services,
+      companyType: user.companyProfile?.companyType || null,
+      employeeCount: user.companyProfile?.employeeCount || null,
+      website: user.companyProfile?.website || null,
+      fullAddress: user.companyProfile?.fullAddress || null,
+      province: user.companyProfile?.province || null,
+      commune: user.companyProfile?.commune || null,
+      nationalScope: user.companyProfile?.nationalScope || false,
+      socialMedia,
+    };
+  }
+  return null;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const token = req.headers.get('authorization')?.replace('Bearer ', '');
@@ -41,16 +92,12 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      user: {
-        id: user.id,
-        phone: user.phone,
-        email: user.email,
-        role: user.role,
-        status: user.status,
-        clientProfile: user.clientProfile,
-        providerProfile: user.providerProfile,
-        companyProfile: user.companyProfile,
-      },
+      id: user.id,
+      phone: user.phone,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      profile: mapProfile(user),
       suspensionMessage,
     });
   } catch (error) {
