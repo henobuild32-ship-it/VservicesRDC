@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  phone         String   @unique
+  password      String
+  email         String?
+  role          String   @default("CLIENT") // CLIENT, PRESTATAIRE, ENTREPRISE, ADMIN
+  status        String   @default("approved") // pending, approved, rejected, suspended
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Client profile
+  clientProfile  ClientProfile?
+  
+  // Provider profile
+  providerProfile ProviderProfile?
+
+  // Company profile
+  companyProfile  CompanyProfile?
+
+  // Reviews written by this user (as client)
+  reviewsWritten  Review[]
+
+  // Reviews received (as provider/company)
+  reviewsReceived Review[]  @relation("ReviewedUser")
+
+  // Notifications received
+  notifications   Notification[]
+
+  // Contact messages sent
+  contactMessages ContactMessage[]
+
+  // Announcements sent by admin
+  announcementsSent AdminAnnouncement[] @relation("AnnouncementAuthor")
+}
+
+model ClientProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  fullName  String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProviderProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  fullName        String
+  email           String
+  phone           String
+  photoUrl        String?
+  sector          String
+  service         String
+  province        String?
+  commune         String?
+  description     String?
+  socialMedia     String?  // JSON string for social links
+  nationalScope   Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CompanyProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  companyName     String
+  email           String
+  phone           String
+  logoUrl         String?
+  coverPhotoUrl   String?
+  sector          String
+  companyType     String   @default("individuelle") // individuelle, avec_employes
+  employeeCount   Int?
+  website         String?
+  fullAddress     String?
+  services        String?  // JSON string for multiple services
+  province        String?
+  commune         String?
+  socialMedia     String?  // JSON string for social links
+  nationalScope   Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  authorId    String
+  targetId    String   // the user being reviewed
+  targetType  String   // "PRESTATAIRE" or "ENTREPRISE"
+  rating      Int      // 1-5
+  comment     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  target      User     @relation("ReviewedUser", fields: [targetId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("info") // info, warning, announcement
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  userId    String?
+  name      String
+  email     String
+  message   String
+  read      Boolean  @default(false)
+  reply     String?
+  repliedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model AdminAnnouncement {
+  id          String   @id @default(cuid())
+  authorId    String
+  title       String
+  message     String
+  targetType  String   // "all_prestataires", "all_entreprises", "all_providers", "all_clients", "specific"
+  targetId    String?  // for specific targeting
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author      User     @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+}
