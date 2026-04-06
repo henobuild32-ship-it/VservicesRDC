@@ -318,28 +318,51 @@ export default function VServiceRDC() {
   const [loginLoading, setLoginLoading] = useState(false)
 
   const handleLogin = async () => {
+    // Admin mode: only admin password needed
+    if (loginIsAdmin) {
+      if (!loginAdminPass) {
+        toast({ title: 'Erreur', description: 'Veuillez entrer le mot de passe administrateur.', variant: 'destructive' })
+        return
+      }
+      setLoginLoading(true)
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isAdmin: true, adminPassword: loginAdminPass })
+        })
+        const data = await res.json()
+        if (res.ok) {
+          localStorage.setItem('vservicerdc_token', data.token)
+          setToken(data.token)
+          toast({ title: 'Connexion admin réussie', description: 'Bienvenue dans l\'espace administrateur !' })
+        } else {
+          toast({ title: 'Erreur', description: data.error || 'Mot de passe administrateur incorrect.', variant: 'destructive' })
+        }
+      } catch {
+        toast({ title: 'Erreur', description: 'Erreur de connexion au serveur.', variant: 'destructive' })
+      }
+      setLoginLoading(false)
+      return
+    }
+    // Regular user login
     if (!loginPhone || !loginPassword) {
       toast({ title: 'Erreur', description: 'Veuillez remplir tous les champs.', variant: 'destructive' })
       return
     }
     setLoginLoading(true)
     try {
-      const body: any = { phone: formatPhone(loginPhone), password: loginPassword }
-      if (loginIsAdmin) body.isAdmin = true
-
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify({ phone: formatPhone(loginPhone), password: loginPassword })
       })
       const data = await res.json()
 
       if (res.ok) {
-        const savedToken = data.token
-        localStorage.setItem('vservicerdc_token', savedToken)
-        setToken(savedToken)
+        localStorage.setItem('vservicerdc_token', data.token)
+        setToken(data.token)
         toast({ title: 'Connexion réussie', description: 'Bienvenue sur VServiceRDC !' })
-        // User profile will be fetched in useEffect
       } else {
         toast({ title: 'Erreur de connexion', description: data.message || data.error || 'Identifiants incorrects.', variant: 'destructive' })
       }
@@ -359,66 +382,108 @@ export default function VServiceRDC() {
         <div className="text-center mb-8">
           <img src="/logo.png" alt="VServiceRDC" className="h-16 w-auto mx-auto mb-3" />
           <h1 className="text-2xl font-bold text-gray-900">Connexion</h1>
-          <p className="text-gray-500 mt-1">Accédez à votre compte VServiceRDC</p>
+          <p className="text-gray-500 mt-1">
+            {loginIsAdmin ? 'Accédez à l\'espace administrateur' : 'Accédez à votre compte VServiceRDC'}
+          </p>
         </div>
 
         <Card className="shadow-lg border-emerald-100">
           <CardContent className="pt-6 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="login-phone">Numéro de téléphone</Label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  id="login-phone"
-                  placeholder="+243 XXX XXX XXX"
-                  value={loginPhone}
-                  onChange={e => setLoginPhone(formatPhone(e.target.value))}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="login-password">Mot de passe</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  id="login-password"
-                  type={showLoginPass ? 'text' : 'password'}
-                  placeholder="Votre mot de passe"
-                  value={loginPassword}
-                  onChange={e => setLoginPassword(e.target.value)}
-                  className="pl-10 pr-10"
-                />
-                <button onClick={() => setShowLoginPass(!showLoginPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showLoginPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2 pt-1">
+            {/* Admin toggle */}
+            <div className="flex items-center space-x-2">
               <Checkbox id="admin-toggle" checked={loginIsAdmin} onCheckedChange={(v) => setLoginIsAdmin(v === true)} />
-              <Label htmlFor="admin-toggle" className="text-sm cursor-pointer">Espace Admin</Label>
+              <Label htmlFor="admin-toggle" className="text-sm cursor-pointer font-medium">
+                <Shield className="h-4 w-4 inline-block mr-1 text-emerald-600" />
+                Espace Admin
+              </Label>
             </div>
 
-            {loginIsAdmin && (
-              <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                <Label htmlFor="admin-pass">Mot de passe admin</Label>
-                <Input id="admin-pass" type="password" placeholder="Mot de passe administrateur" value={loginAdminPass} onChange={e => setLoginAdminPass(e.target.value)} />
+            <Separator />
+
+            {loginIsAdmin ? (
+              /* === ADMIN MODE: only admin password === */
+              <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-100">
+                  <Shield className="h-8 w-8 text-emerald-600 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-800">Connexion Administrateur</p>
+                    <p className="text-xs text-emerald-600">Entrez votre mot de passe pour accéder au tableau de bord</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="admin-pass">Mot de passe administrateur</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="admin-pass"
+                      type={showLoginPass ? 'text' : 'password'}
+                      placeholder="Mot de passe administrateur"
+                      value={loginAdminPass}
+                      onChange={e => setLoginAdminPass(e.target.value)}
+                      className="pl-10 pr-10"
+                      onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                    />
+                    <button onClick={() => setShowLoginPass(!showLoginPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      {showLoginPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleLogin} disabled={loginLoading}>
+                  {loginLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  Accéder au dashboard admin
+                </Button>
               </div>
+            ) : (
+              /* === NORMAL MODE: phone + password === */
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="login-phone">Numéro de téléphone</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="login-phone"
+                      placeholder="+243 XXX XXX XXX"
+                      value={loginPhone}
+                      onChange={e => setLoginPhone(formatPhone(e.target.value))}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="login-password">Mot de passe</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="login-password"
+                      type={showLoginPass ? 'text' : 'password'}
+                      placeholder="Votre mot de passe"
+                      value={loginPassword}
+                      onChange={e => setLoginPassword(e.target.value)}
+                      className="pl-10 pr-10"
+                      onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                    />
+                    <button onClick={() => setShowLoginPass(!showLoginPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      {showLoginPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleLogin} disabled={loginLoading}>
+                  {loginLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  Se connecter
+                </Button>
+
+                <p className="text-center text-sm text-gray-500">
+                  Pas encore de compte ?{' '}
+                  <button onClick={() => navigate('register')} className="text-emerald-600 font-medium hover:underline">
+                    S'inscrire
+                  </button>
+                </p>
+              </>
             )}
-
-            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleLogin} disabled={loginLoading}>
-              {loginLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Se connecter
-            </Button>
-
-            <p className="text-center text-sm text-gray-500">
-              Pas encore de compte ?{' '}
-              <button onClick={() => navigate('register')} className="text-emerald-600 font-medium hover:underline">
-                S'inscrire
-              </button>
-            </p>
           </CardContent>
         </Card>
       </div>

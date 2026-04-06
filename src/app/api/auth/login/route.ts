@@ -1,26 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { verifyPassword, ADMIN_DEFAULT_PASSWORD } from '@/lib/auth';
+import { verifyPassword, hashPassword, ADMIN_DEFAULT_PASSWORD } from '@/lib/auth';
 import { createSession } from '@/lib/session';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { phone, password, isAdmin } = body;
+    const { phone, password, isAdmin, adminPassword } = body;
 
-    if (!phone || !password) {
-      return NextResponse.json({ error: 'Téléphone et mot de passe sont requis' }, { status: 400 });
-    }
-
-    if (isAdmin) {
-      // Admin login - check against admin credentials
-      if (password !== ADMIN_DEFAULT_PASSWORD) {
+    // Admin-only login: only adminPassword field
+    if (isAdmin && adminPassword) {
+      if (adminPassword !== ADMIN_DEFAULT_PASSWORD) {
         return NextResponse.json({ error: 'Mot de passe administrateur incorrect' }, { status: 401 });
       }
       // Find or create admin user
       let admin = await db.user.findFirst({ where: { role: 'ADMIN' } });
       if (!admin) {
-        const { hashPassword } = await import('@/lib/auth');
         admin = await db.user.create({
           data: {
             phone: '+243000000000',
@@ -43,6 +38,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Regular user login
+    if (!phone || !password) {
+      return NextResponse.json({ error: 'Téléphone et mot de passe sont requis' }, { status: 400 });
+    }
+
     const user = await db.user.findUnique({
       where: { phone },
       include: {
