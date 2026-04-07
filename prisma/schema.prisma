@@ -40,6 +40,13 @@ model User {
 
   // Announcements sent by admin
   announcementsSent AdminAnnouncement[] @relation("AnnouncementAuthor")
+
+  // Conversations
+  conversations1 Conversation[] @relation("ConvParticipant1")
+  conversations2 Conversation[] @relation("ConvParticipant2")
+
+  // Chat messages sent
+  chatMessages ChatMessage[]
 }
 
 model ClientProfile {
@@ -148,4 +155,33 @@ model AdminAnnouncement {
   updatedAt   DateTime @updatedAt
 
   author      User     @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id              String   @id @default(cuid())
+  participant1Id  String
+  participant2Id  String
+  lastMessageAt   DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  participant1    User     @relation("ConvParticipant1", fields: [participant1Id], references: [id], onDelete: Cascade)
+  participant2    User     @relation("ConvParticipant2", fields: [participant2Id], references: [id], onDelete: Cascade)
+
+  messages        ChatMessage[]
+
+  @@unique([participant1Id, participant2Id])
+}
+
+model ChatMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  content        String
+  read           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
 }

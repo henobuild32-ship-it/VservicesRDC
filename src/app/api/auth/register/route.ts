@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     const hashedPassword = await hashPassword(password);
-    const status = role === 'CLIENT' ? 'approved' : 'pending';
+    const status = 'approved'; // Auto-approve all accounts
 
     const user = await db.user.create({
       data: {

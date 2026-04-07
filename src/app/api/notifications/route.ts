@@ -55,3 +55,26 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Erreur' }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const token = req.headers.get('authorization')?.replace('Bearer ', '');
+    if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+    const session = getSession(token);
+    if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+
+    const body = await req.json();
+    const { notificationId } = body;
+
+    if (notificationId) {
+      await db.notification.delete({
+        where: { id: notificationId, userId: session.userId },
+      });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Delete notification error:', error);
+    return NextResponse.json({ error: 'Erreur' }, { status: 500 });
+  }
+}
