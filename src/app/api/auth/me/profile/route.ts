@@ -12,50 +12,60 @@ export async function PUT(req: NextRequest) {
 
     const body = await req.json();
 
+    // Update email on User if provided
+    if (body.email) {
+      await db.user.update({ where: { id: session.userId }, data: { email: body.email } });
+    }
+
+    // Update auto-reply message if provided
+    if (body.autoReplyMessage !== undefined) {
+      await db.user.update({ where: { id: session.userId }, data: { autoReplyMessage: body.autoReplyMessage || null } });
+    }
+
     if (session.role === 'CLIENT') {
       await db.clientProfile.update({
         where: { userId: session.userId },
-        data: { fullName: body.fullName || undefined },
+        data: {
+          fullName: body.fullName || undefined,
+          email: body.email || undefined,
+        },
       });
-      if (body.email) {
-        await db.user.update({ where: { id: session.userId }, data: { email: body.email } });
-      }
       return NextResponse.json({ success: true });
     }
 
     if (session.role === 'PRESTATAIRE') {
-      const serviceValue = Array.isArray(body.services) ? (body.services[0] || '') : (body.service || '');
+      const serviceValue = Array.isArray(body.services) && body.services.length > 0 ? body.services[0] : '';
+      const servicesJson = Array.isArray(body.services) && body.services.length > 0 ? JSON.stringify(body.services) : null;
       await db.providerProfile.upsert({
         where: { userId: session.userId },
         create: {
           userId: session.userId,
-          fullName: body.fullName,
-          email: body.email,
-          phone: body.phone,
-          sector: body.sector,
+          fullName: body.fullName || '',
+          email: body.email || '',
+          phone: body.phone || '',
+          sector: body.sector || '',
           service: serviceValue,
-          province: body.province,
-          commune: body.commune,
-          description: body.description,
+          services: servicesJson,
+          province: body.province || null,
+          commune: body.commune || null,
+          description: body.description || null,
           socialMedia: body.socialMedia ? JSON.stringify(body.socialMedia) : null,
           nationalScope: body.nationalScope || false,
         },
         update: {
-          fullName: body.fullName,
-          email: body.email,
-          phone: body.phone,
-          sector: body.sector,
+          fullName: body.fullName || '',
+          email: body.email || '',
+          phone: body.phone || '',
+          sector: body.sector || '',
           service: serviceValue,
-          province: body.province,
-          commune: body.commune,
-          description: body.description,
+          services: servicesJson,
+          province: body.province || null,
+          commune: body.commune || null,
+          description: body.description || null,
           socialMedia: body.socialMedia ? JSON.stringify(body.socialMedia) : null,
           nationalScope: body.nationalScope || false,
         },
       });
-      if (body.email) {
-        await db.user.update({ where: { id: session.userId }, data: { email: body.email } });
-      }
       return NextResponse.json({ success: true });
     }
 
@@ -64,32 +74,32 @@ export async function PUT(req: NextRequest) {
         where: { userId: session.userId },
         create: {
           userId: session.userId,
-          companyName: body.companyName,
-          email: body.email,
-          phone: body.phone,
-          sector: body.sector,
-          companyType: body.companyType,
-          employeeCount: body.employeeCount,
-          website: body.website,
-          fullAddress: body.fullAddress,
+          companyName: body.companyName || '',
+          email: body.email || '',
+          phone: body.phone || '',
+          sector: body.sector || '',
+          companyType: body.companyType || 'individuelle',
+          employeeCount: body.employeeCount || null,
+          website: body.website || null,
+          fullAddress: body.fullAddress || null,
           services: body.services ? JSON.stringify(body.services) : null,
-          province: body.province,
-          commune: body.commune,
+          province: body.province || null,
+          commune: body.commune || null,
           socialMedia: body.socialMedia ? JSON.stringify(body.socialMedia) : null,
           nationalScope: body.nationalScope || false,
         },
         update: {
-          companyName: body.companyName,
-          email: body.email,
-          phone: body.phone,
-          sector: body.sector,
-          companyType: body.companyType,
-          employeeCount: body.employeeCount,
-          website: body.website,
-          fullAddress: body.fullAddress,
+          companyName: body.companyName || '',
+          email: body.email || '',
+          phone: body.phone || '',
+          sector: body.sector || '',
+          companyType: body.companyType || 'individuelle',
+          employeeCount: body.employeeCount || null,
+          website: body.website || null,
+          fullAddress: body.fullAddress || null,
           services: body.services ? JSON.stringify(body.services) : null,
-          province: body.province,
-          commune: body.commune,
+          province: body.province || null,
+          commune: body.commune || null,
           socialMedia: body.socialMedia ? JSON.stringify(body.socialMedia) : null,
           nationalScope: body.nationalScope || false,
         },

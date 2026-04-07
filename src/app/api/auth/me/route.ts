@@ -6,6 +6,7 @@ function mapProfile(user: any) {
   if (user.role === 'CLIENT') {
     return {
       fullName: user.clientProfile?.fullName || null,
+      email: user.clientProfile?.email || null,
     };
   }
   if (user.role === 'PRESTATAIRE') {
@@ -13,11 +14,19 @@ function mapProfile(user: any) {
     if (user.providerProfile?.socialMedia) {
       try { socialMedia = JSON.parse(user.providerProfile.socialMedia); } catch { socialMedia = null; }
     }
+    // Support both service (single) and services (JSON array)
+    let services: string[] = [];
+    if (user.providerProfile?.services) {
+      try { services = JSON.parse(user.providerProfile.services); } catch { services = []; }
+    }
+    if (services.length === 0 && user.providerProfile?.service) {
+      services = [user.providerProfile.service];
+    }
     return {
       fullName: user.providerProfile?.fullName || null,
       photo: user.providerProfile?.photoUrl || null,
       sector: user.providerProfile?.sector || null,
-      services: user.providerProfile?.service ? [user.providerProfile.service] : [],
+      services,
       province: user.providerProfile?.province || null,
       commune: user.providerProfile?.commune || null,
       nationalScope: user.providerProfile?.nationalScope || false,
@@ -26,7 +35,7 @@ function mapProfile(user: any) {
     };
   }
   if (user.role === 'ENTREPRISE') {
-    let services = [];
+    let services: string[] = [];
     if (user.companyProfile?.services) {
       try { services = JSON.parse(user.companyProfile.services); } catch { services = []; }
     }
@@ -97,6 +106,9 @@ export async function GET(req: NextRequest) {
       email: user.email,
       role: user.role,
       status: user.status,
+      autoReplyMessage: user.autoReplyMessage || null,
+      deletionReason: user.deletionReason || null,
+      deletionRequestedAt: user.deletionRequestedAt || null,
       profile: mapProfile(user),
       suspensionMessage,
     });

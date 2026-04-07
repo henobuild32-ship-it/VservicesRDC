@@ -13,7 +13,7 @@ function mapProviderProfile(user: any) {
       photo: pp.photoUrl || null,
       logo: null,
       sector: pp.sector || null,
-      services: pp.service ? [pp.service] : [],
+      services: pp.services ? (() => { try { return JSON.parse(pp.services); } catch { return pp.service ? [pp.service] : []; } })() : (pp.service ? [pp.service] : []),
       province: pp.province || null,
       commune: pp.commune || null,
       nationalScope: pp.nationalScope || false,
@@ -66,6 +66,7 @@ export async function GET(req: NextRequest) {
     const service = searchParams.get('service');
     const query = searchParams.get('query');
     const type = searchParams.get('type');
+    const role = searchParams.get('role');
     const userId = searchParams.get('userId');
 
     if (userId) {
@@ -103,6 +104,7 @@ export async function GET(req: NextRequest) {
         email: user.email,
         role: user.role,
         status: user.status,
+        autoReplyMessage: user.autoReplyMessage || null,
         profile: mapProviderProfile(user),
         reviews,
         avgRating: avgRating ? Math.round(avgRating * 10) / 10 : 0,
@@ -118,6 +120,9 @@ export async function GET(req: NextRequest) {
 
     if (type && type !== 'all') {
       where.role = type;
+    }
+    if (role && role !== 'all' && role !== '') {
+      where.role = role;
     }
 
     const users = await db.user.findMany({

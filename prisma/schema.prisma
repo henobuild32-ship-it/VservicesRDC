@@ -14,6 +14,9 @@ model User {
   email         String?
   role          String   @default("CLIENT") // CLIENT, PRESTATAIRE, ENTREPRISE, ADMIN
   status        String   @default("approved") // pending, approved, rejected, suspended
+  autoReplyMessage String? // Custom auto-reply when user is offline
+  deletionReason String? // Reason for account deletion request
+  deletionRequestedAt DateTime? // When user requested deletion
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -53,6 +56,7 @@ model ClientProfile {
   id        String   @id @default(cuid())
   userId    String   @unique
   fullName  String?
+  email     String?
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -67,6 +71,7 @@ model ProviderProfile {
   photoUrl        String?
   sector          String
   service         String
+  services        String?  // JSON array for multiple services
   province        String?
   commune         String?
   description     String?

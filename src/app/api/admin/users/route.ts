@@ -84,6 +84,8 @@ export async function GET(req: NextRequest) {
       role: u.role,
       status: u.status,
       createdAt: u.createdAt,
+      deletionReason: u.deletionReason || null,
+      deletionRequestedAt: u.deletionRequestedAt || null,
       profile: mapUserProfile(u),
     }));
 
@@ -105,6 +107,18 @@ export async function DELETE(req: NextRequest) {
     const { userId } = body;
 
     if (!userId) return NextResponse.json({ error: 'userId requis' }, { status: 400 });
+
+    // First notify the user their account is being deleted
+    try {
+      await db.notification.create({
+        data: {
+          userId: userId,
+          title: 'Compte supprimé',
+          message: 'Votre compte a été supprimé définitivement par l\'administration. Vous allez être déconnecté automatiquement.',
+          type: 'warning',
+        },
+      });
+    } catch { /* user may already be partially deleted */ }
 
     await db.user.delete({ where: { id: userId } });
 

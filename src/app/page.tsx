@@ -167,6 +167,15 @@ export default function VServiceRDC() {
   const [onboardingStep, setOnboardingStep] = useState(0)
   // Theme/Lang selector
   const [showSettings, setShowSettings] = useState(false)
+  // Auto-reply
+  const [autoReplyMsg, setAutoReplyMsg] = useState(''); const [autoReplyLoading, setAutoReplyLoading] = useState(false)
+  const [chatAutoReply, setChatAutoReply] = useState('')
+  // Deletion request
+  const [deletionReason, setDeletionReason] = useState(''); const [deletionLoading, setDeletionLoading] = useState(false)
+  // Suspended
+  const [suspensionNotif, setSuspensionNotif] = useState<{ message: string } | null>(null)
+  // Search improvements
+  const [searchAllCommunes, setSearchAllCommunes] = useState(false); const [customServiceInput, setCustomServiceInput] = useState('')
 
   useEffect(() => { localStorage.setItem('vservicerdc_theme', theme) }, [theme])
   useEffect(() => { localStorage.setItem('vservicerdc_lang', lang) }, [lang])
@@ -189,6 +198,8 @@ export default function VServiceRDC() {
       } else { localStorage.removeItem('vservicerdc_token'); setToken(null) }
     } catch { localStorage.removeItem('vservicerdc_token'); setToken(null) }
   }
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- sync state from user data
+  useEffect(() => { if (user) { setAutoReplyMsg((user as any).autoReplyMessage || ''); if ((user as any).deletionReason) setDeletionReason((user as any).deletionReason) } }, [user])
   // eslint-disable-next-line react-hooks/set-state-in-effect -- mount auth check
   useEffect(() => { if (token && !user) void fetchUserProfile() }, [token, user])
   useEffect(() => { if (user && typeof window !== 'undefined' && !localStorage.getItem('vservicerdc_onboarded')) { const tm = setTimeout(() => setShowOnboarding(true), 500); return () => clearTimeout(tm) } }, [user])
@@ -223,12 +234,28 @@ export default function VServiceRDC() {
     setChatMessages(p => [...p, { id: 'temp-' + Date.now(), senderId: user!.id, content: msg, read: false, createdAt: new Date().toISOString() }])
     try { await fetch('/api/chat/messages', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ conversationId: currentChatId, content: msg }) }) } catch { /* */ }
   }
-  // Polling for chat messages
+  // Fetch other user auto-reply in chat
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- async function
+  const fetchChatAutoReply = async (convId: string) => {
+    setChatAutoReply('')
+    if (!token || !chatOtherUser?.id) return
+    try {
+      const r = await fetch(`/api/providers?userId=${chatOtherUser.id}`, { headers: authHeaders() })
+      if (r.ok) { const d = await r.json(); setChatAutoReply(d.autoReplyMessage || '') }
+    } catch { /* */ }
+  }
+
+  // Polling for chat messages + auto-reply check
   useEffect(() => {
     if (currentView !== 'chat-conversation' || !currentChatId) return
     const interval = setInterval(() => fetchChatMessages(currentChatId), 3000)
     return () => clearInterval(interval)
   }, [currentView, currentChatId])
+  /* eslint-disable react-hooks/set-state-in-effect -- async fetch triggers setState in callback which is fine */
+  useEffect(() => {
+    if (currentView === 'chat-conversation' && chatOtherUser?.id) { fetchChatAutoReply(currentChatId).catch(() => {}) }
+  }, [currentView, chatOtherUser?.id])
+  /* eslint-enable react-hooks/set-state-in-effect */
   // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on view change
   useEffect(() => { if (currentView === 'chat') fetchConversations() }, [currentView])
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages])
@@ -326,7 +353,11 @@ export default function VServiceRDC() {
           if (regCover) { const fd = new FormData(); fd.append('file', regCover); fd.append('type', 'company-cover'); fd.append('userId', data.user.id); await fetch('/api/upload', { method: 'POST', headers, body: fd }) }
         }
         toast({ title: t('saved'), description: t('welcome') })
-        navigate('login')
+        // Auto-login after registration
+        localStorage.setItem('vservicerdc_token', data.token); setToken(data.token)
+        setUser({ id: data.user.id, phone: data.user.phone, email: data.user.email, role: data.user.role as AccountType, status: data.user.status, profile: data.user.profile || undefined })
+        const regRole = data.user.role as AccountType
+        if (regRole === 'CLIENT') navigate('client-dashboard'); else if (regRole === 'PRESTATAIRE') navigate('prestataire-dashboard'); else if (regRole === 'ENTREPRISE') navigate('entreprise-dashboard')
       } else toast({ title: "Erreur", description: data.message || data.error || 'Erreur.', variant: 'destructive' })
     } catch { toast({ title: 'Erreur', description: 'Erreur serveur.', variant: 'destructive' }) }
     setRegLoading(false)
@@ -448,8 +479,8 @@ export default function VServiceRDC() {
       if (res.ok) {
         if (editPhoto) { const fd = new FormData(); fd.append('file', editPhoto); fd.append('type', user.role === 'ENTREPRISE' ? 'company-logo' : 'provider-photo'); await fetch('/api/upload', { method: 'POST', headers: multiPartHeaders(), body: fd }) }
         toast({ title: t('saved'), description: t('savedDesc') })
-        const mr = await fetch('/api/auth/me', { headers: authHeaders() }); if (mr.ok) { const md = await mr.json(); setUser({ id: md.id, phone: md.phone, email: md.email, role: md.role, status: md.status, profile: md.profile || undefined }) }
-        navigate(user.role === 'PRESTATAIRE' ? 'prestataire-dashboard' : 'entreprise-dashboard')
+        const mr = await fetch('/api/auth/me', { headers: authHeaders() }); if (mr.ok) { const md = await mr.json(); setUser({ id: md.id, phone: md.phone, email: md.email, role: md.role, status: md.status, autoReplyMessage: md.autoReplyMessage, deletionReason: md.deletionReason, deletionRequestedAt: md.deletionRequestedAt, profile: md.profile || undefined }) }
+        if (user.role === 'CLIENT') navigate('client-dashboard'); else if (user.role === 'PRESTATAIRE') navigate('prestataire-dashboard'); else navigate('entreprise-dashboard')
       } else toast({ title: 'Erreur', variant: 'destructive' })
     } catch { toast({ title: 'Erreur', variant: 'destructive' }) }
     setEditLoading(false)
@@ -463,6 +494,27 @@ export default function VServiceRDC() {
   const handleContact = async () => { if (!contactName || !contactEmail || !contactMessage) return; setContactLoading(true); try { const r = await fetch('/api/contact', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: contactName, email: contactEmail, message: contactMessage }) }); if (r.ok) { toast({ title: t('send') }); setContactName(''); setContactEmail(''); setContactMessage('') } } catch { /* */ }; setContactLoading(false) }
   const handleChangePassword = async () => { if (!newPassword || newPassword.length < 6) return; setChangePassLoading(true); try { const r = await fetch('/api/auth/me/profile', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ newPassword }) }); if (r.ok) { toast({ title: 'Mot de passe modifié' }); setShowChangePass(false); setNewPassword('') } } catch { /* */ }; setChangePassLoading(false) }
 
+  // Auto-reply save
+  const handleSaveAutoReply = async () => { if (!token) return; setAutoReplyLoading(true); try { const r = await fetch('/api/auth/me/profile', { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ autoReplyMessage: autoReplyMsg || null }) }); if (r.ok) { toast({ title: 'Message automatique enregistré' }); setUser(p => p ? { ...p, autoReplyMessage: autoReplyMsg || null } : p) } else toast({ title: 'Erreur', variant: 'destructive' }) } catch { /* */ }; setAutoReplyLoading(false) }
+
+  // Deletion request
+  const handleRequestDeletion = async () => { if (!deletionReason || deletionReason.length < 5) { toast({ title: 'Erreur', description: 'Minimum 5 caractères', variant: 'destructive' }); return }; setDeletionLoading(true); try { const r = await fetch('/api/account', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ reason: deletionReason }) }); if (r.ok) { toast({ title: 'Demande envoyée', description: "L'admin va traiter votre demande." }); setUser(p => p ? { ...p, deletionReason, deletionRequestedAt: new Date().toISOString() } : p) } } catch { /* */ }; setDeletionLoading(false) }
+  const handleCancelDeletion = async () => { if (!token) return; try { const r = await fetch('/api/account', { method: 'DELETE', headers: authHeaders() }); if (r.ok) { toast({ title: 'Demande annulée' }); setDeletionReason(''); setUser(p => p ? { ...p, deletionReason: null, deletionRequestedAt: null } : p) } } catch { /* */ } }
+
+  /* eslint-disable react-hooks/set-state-in-effect -- check suspended status after notifications load */
+  useEffect(() => {
+    if (!token || !user) return
+    if (user.status === 'suspended') {
+      fetchNotifications().then(() => {
+        const suspNotif = notifications.find(n => n.type === 'warning')
+        if (suspNotif) setSuspensionNotif({ message: suspNotif.message })
+      })
+    } else {
+      setSuspensionNotif(null)
+    }
+  }, [user?.status, notifications])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   // Provider dashboard
   const [providerDashReviews, setProviderDashReviews] = useState<Review[]>([]); const [providerDashAvg, setProviderDashAvg] = useState(0); const [providerDashCount, setProviderDashCount] = useState(0)
   useEffect(() => {
@@ -474,6 +526,24 @@ export default function VServiceRDC() {
       })()
     }
   }, [currentView])
+
+  // ============================================================
+  // SUSPENDED OVERLAY
+  // ============================================================
+  const renderSuspendedOverlay = () => {
+    if (user?.status !== 'suspended') return null
+    return (
+      <div className="fixed inset-0 z-[100] bg-gray-950 flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 mx-auto rounded-full bg-red-900/30 flex items-center justify-center mb-6"><Ban className="h-10 w-10 text-red-400" /></div>
+          <h1 className="text-2xl font-bold text-white mb-3">⚠️ Compte Suspendu</h1>
+          <p className="text-red-300 mb-4">Votre compte a été suspendu temporairement.</p>
+          {suspensionNotif && <div className="bg-gray-900 border border-red-800 p-4 rounded-lg mb-6 text-left"><p className="text-gray-300 text-sm">{suspensionNotif.message}</p></div>}
+          <Button variant="outline" className="text-gray-400 border-gray-700 hover:bg-gray-800" onClick={logout}><LogOut className="h-4 w-4 mr-2" />Se déconnecter</Button>
+        </div>
+      </div>
+    )
+  }
 
   // ============================================================
   // SETTINGS FLOATER (theme + language)
@@ -676,7 +746,9 @@ export default function VServiceRDC() {
   // ============================================================
   const renderClientDashboard = () => (
     <div className={`min-h-screen ${th.pageBg} pb-20`}>
+      {renderSuspendedOverlay()}
       <SettingsFloater />
+      {(user as any)?.deletionRequestedAt && <Alert className="mx-4 mt-2 max-w-lg border-amber-200 bg-amber-50"><AlertTriangle className="h-4 w-4 text-amber-600" /><AlertTitle className="text-amber-800">Demande de suppression en cours</AlertTitle><AlertDescription className="text-amber-700 text-xs">Vous avez demandé la suppression de votre compte. L'admin va traiter votre demande.</AlertDescription></Alert>}
       <div className={`${th.headerBg} ${th.headerText} px-4 pt-6 pb-8`}>
         <div className="max-w-lg mx-auto">
           <div className="flex items-center justify-between mb-4"><div className="flex items-center gap-2"><img src="/logo.png" alt="VServiceRDC" className="h-8 w-auto" /><span className="font-bold text-lg">VServiceRDC</span></div></div>
@@ -698,27 +770,30 @@ export default function VServiceRDC() {
           <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input placeholder={t('searchPlaceholder')} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" /></div>
           <div className="grid grid-cols-2 gap-2">
             <Select value={searchProvince} onValueChange={v => { setSearchProvince(v); setSearchCommune('') }}><SelectTrigger className="w-full text-sm"><SelectValue placeholder={t('province')} /></SelectTrigger><SelectContent>{getAllProvinceNames().map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>
-            <Select value={searchCommune} onValueChange={setSearchCommune} disabled={!searchProvince}><SelectTrigger className="w-full text-sm"><SelectValue placeholder={t('commune')} /></SelectTrigger><SelectContent>{searchProvince && getCommunes(searchProvince).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
+            <div className="space-y-1"><Select value={searchCommune} onValueChange={setSearchCommune} disabled={!searchProvince || searchAllCommunes}><SelectTrigger className="w-full text-sm"><SelectValue placeholder={t('commune')} /></SelectTrigger><SelectContent>{searchProvince && getCommunes(searchProvince).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select><div className="flex items-center gap-2"><Checkbox id="all-com" checked={searchAllCommunes} onCheckedChange={(v) => { setSearchAllCommunes(v === true); if (v === true) setSearchCommune('') }} /><Label htmlFor="all-com" className="text-xs text-gray-500 cursor-pointer">Toutes les communes</Label></div></div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Select value={searchSector} onValueChange={v => { setSearchSector(v); setSearchService('') }}><SelectTrigger className="w-full text-sm"><SelectValue placeholder={t('sector')} /></SelectTrigger><SelectContent>{getAllSectorNames().map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
             <Select value={searchService} onValueChange={setSearchService} disabled={!searchSector}><SelectTrigger className="w-full text-sm"><SelectValue placeholder={t('service')} /></SelectTrigger><SelectContent>{searchSector && getServicesBySector(searchSector).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
           </div>
-          <Button className={`w-full ${th.primary} ${th.primaryText}`} onClick={() => handleSearch(false)}>{searchLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Search className="h-4 w-4 mr-1" />}{t('search')}</Button>
+          <div className="relative"><Input placeholder="Écrire un service à rechercher..." value={customServiceInput} onChange={e => setCustomServiceInput(e.target.value)} className="pr-10" /><Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /></div>
+          <Button className={`w-full ${th.primary} ${th.primaryText}`} onClick={() => { if (customServiceInput.trim()) { setSearchService(''); setSearchSector(''); setSearchQuery(customServiceInput.trim()); handleSearch(false); setCustomServiceInput('') } else handleSearch(false) }}>{searchLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Search className="h-4 w-4 mr-1" />}{t('search')}</Button>
         </CardContent></Card>
         {/* Results */}
         {searchLoading ? <div className="space-y-3">{[1, 2, 3].map(i => <Card key={i}><CardContent className="p-4"><Skeleton className="h-20 w-full rounded" /></CardContent></Card>)}</div> : hasSearched ? (
           <div className="space-y-3">
-            <p className={`text-sm ${th.textSecondary}`}>{searchResults.length} {t('results')}</p>
+            <p className={`text-sm font-medium ${th.textPrimary}`}>{searchResults.length} {searchTargetType === 'ENTREPRISE' ? 'entreprise(s) trouvée(s)' : searchTargetType === 'PRESTATAIRE' ? 'prestataire(s) trouvé(s)' : 'résultat(s) trouvé(s)'}</p>
             {searchResults.map(p => (
-              <Card key={p.id} className={`hover:shadow-md transition-shadow cursor-pointer ${th.accentBorder}`} onClick={() => viewProviderDetail(p.id)}>
-                <CardContent className="p-4"><div className="flex gap-3">
+              <Card key={p.id} className={`hover:shadow-md transition-shadow ${th.accentBorder}`}>
+                <CardContent className="p-4"><div className="flex gap-3" onClick={() => viewProviderDetail(p.id)} style={{ cursor: 'pointer' }}>
                   <Avatar className="h-14 w-14 flex-shrink-0"><AvatarImage src={p.profile?.logo || p.profile?.photo} /><AvatarFallback className={theme === 'red' ? 'bg-red-50 text-red-700' : theme === 'dark' ? 'bg-emerald-900 text-emerald-300' : 'bg-emerald-50 text-emerald-700'}>{getInitials(p.profile?.companyName || p.profile?.fullName || 'P')}</AvatarFallback></Avatar>
                   <div className="flex-1 min-w-0"><div className="flex items-start justify-between gap-2"><h3 className={`font-semibold ${th.textPrimary} truncate`}>{p.profile?.companyName || p.profile?.fullName || 'Sans nom'}</h3>{p.status && getStatusBadge(p.status, theme)}</div><p className={th.accent}>{p.profile?.sector || ''}</p>{(p.profile?.province || p.profile?.nationalScope) && <div className={`flex items-center gap-1 text-xs ${th.textSecondary} mt-1`}><MapPin className="h-3 w-3" />{p.profile?.nationalScope ? 'RDC' : `${p.profile?.province}${p.profile?.commune ? `, ${p.profile.commune}` : ''}`}</div>}{p.profile?.services && p.profile.services.length > 0 && <div className="flex flex-wrap gap-1 mt-1">{p.profile.services.slice(0, 3).map(s => <Badge key={s} variant="secondary" className={`text-xs ${theme === 'red' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{s}</Badge>)}</div>}</div>
-                </div></CardContent>
+                </div>
+                {user && user.role === 'CLIENT' && <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100"><Button size="sm" className={`flex-1 ${th.primary} ${th.primaryText}`} onClick={(e) => { e.stopPropagation(); openChat(p.id, p.profile?.companyName || p.profile?.fullName, p.profile?.logo || p.profile?.photo) }}><MessageSquare className="h-3 w-3 mr-1" />Engager conversation</Button><Button size="sm" variant="outline" className={`${th.accentBorder} ${th.accent}`} asChild><a href={`tel:${p.phone}`} onClick={e => e.stopPropagation()}><Phone className="h-3 w-3 mr-1" />Appeler</a></Button></div>}
+              </CardContent>
               </Card>
             ))}
-            {searchResults.length === 0 && <div className="text-center py-12"><Search className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p className={th.textSecondary}>{t('noResults')}</p></div>}
+            {searchResults.length === 0 && <div className="text-center py-12"><Search className="h-12 w-12 mx-auto text-gray-300 mb-3" /><p className={th.textSecondary}>{t('noResults')}</p><p className="text-xs text-gray-400 mt-1">Essayez de modifier vos critères ou cherchez un autre service.</p></div>}
           </div>
         ) : <div className="text-center py-12"><Search className={`h-12 w-12 mx-auto ${th.accentLight} mb-3`} /><p className={th.textSecondary}>{t('whatAreYouLookingFor')}</p></div>}
       </div>
@@ -793,6 +868,7 @@ export default function VServiceRDC() {
     const isE = user?.role === 'ENTREPRISE'; const p = user?.profile; const status = user?.status || 'approved'
     return (
       <div className={`min-h-screen ${th.pageBg} pb-20`}>
+        {renderSuspendedOverlay()}
         <SettingsFloater />
         {isE && p?.coverPhoto ? <div className="h-44 relative"><img src={p.coverPhoto} alt="" className="w-full h-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" /></div> : <div className={th.headerBg} style={{ height: isE ? 176 : 128 }} />}
         <div className="max-w-lg mx-auto px-4 -mt-10 relative z-10">
@@ -872,6 +948,7 @@ export default function VServiceRDC() {
       <SettingsFloater />
       <div className={`bg-white border-b ${th.borderColor} px-4 py-3 sticky top-0 z-50`}><div className="max-w-lg mx-auto flex items-center gap-3"><Button variant="ghost" size="sm" onClick={() => { navigate('chat'); setCurrentChatId(''); setChatMessages([]) }}><ChevronLeft className="h-4 w-4" /></Button><Avatar className="h-8 w-8"><AvatarImage src={chatOtherUser?.photo || undefined} /><AvatarFallback className={theme === 'red' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}>{chatOtherUser ? getInitials(chatOtherUser.name) : '?'}</AvatarFallback></Avatar><h1 className={`text-base font-bold ${th.textPrimary}`}>{chatOtherUser?.name || '...'}</h1></div></div>
       <div className="flex-1 max-w-lg mx-auto w-full px-4 py-4 overflow-y-auto" style={{ minHeight: 'calc(100vh - 140px)' }}>
+        {chatAutoReply && <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-center"><p className="text-xs text-amber-700">🤖 {chatOtherUser?.name} est probablement hors ligne.</p><p className="text-sm text-amber-800 mt-1">{chatAutoReply}</p></div>}
         {chatMessages.length > 0 ? <div className="space-y-3">
           {chatMessages.map(m => {
             const isMine = m.senderId === user?.id
@@ -896,6 +973,10 @@ export default function VServiceRDC() {
         <Card><CardContent className="pt-6"><h3 className={`font-semibold ${th.textPrimary} mb-3`}>{t('changePassword')}</h3>{!showChangePass ? <Button variant="outline" className={`w-full ${th.accent} ${th.accentBorder}`} onClick={() => setShowChangePass(true)}><Key className="h-4 w-4 mr-1" />{t('changePassword')}</Button> : <div className="space-y-3"><div className="space-y-2"><Label>{t('newPassword')}</Label><Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} /></div><div className="flex gap-2"><Button className={`flex-1 ${th.primary} ${th.primaryText}`} onClick={handleChangePassword} disabled={changePassLoading}>{changePassLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}{t('save')}</Button><Button variant="outline" onClick={() => { setShowChangePass(false); setNewPassword('') }}>{t('cancel')}</Button></div></div>}</CardContent></Card>
         <Card><CardContent className="pt-6"><h3 className={`font-semibold ${th.textPrimary} mb-3`}>{t('contactUs')}</h3><div className="space-y-3"><div className="space-y-2"><Label>{t('yourName')}</Label><Input value={contactName} onChange={e => setContactName(e.target.value)} /></div><div className="space-y-2"><Label>{t('email')}</Label><Input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} /></div><div className="space-y-2"><Label>{t('yourMessage')}</Label><Textarea value={contactMessage} onChange={e => setContactMessage(e.target.value)} rows={3} /></div><Button className={`w-full ${th.primary} ${th.primaryText}`} onClick={handleContact} disabled={contactLoading}>{contactLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}{t('send')}</Button></div></CardContent></Card>
         <Card><CardContent className="pt-6"><h3 className={`font-semibold ${th.textPrimary} mb-3`}>{t('myMessages')}</h3>{contactMessages.length > 0 ? <div className="space-y-3 max-h-64 overflow-y-auto">{contactMessages.map(m => <div key={m.id} className="p-3 rounded-lg border border-gray-100"><p className={`text-sm ${th.textSecondary}`}>{m.message}</p><p className="text-xs text-gray-400 mt-1">{formatDate(m.createdAt)}</p>{m.reply && <div className={`mt-2 p-2 ${th.alertBg} rounded ${th.accentBorder}`}><p className={`text-xs font-medium ${th.accent}`}>Réponse:</p><p className={`text-sm ${th.accent}`}>{m.reply}</p></div>}</div>)}</div> : <p className={`text-sm text-gray-400 text-center py-4`}>{t('noMessages')}</p>}</CardContent></Card>
+        {/* Auto-reply */}
+        <Card className={th.accentBorder}><CardContent className="pt-6 space-y-3"><h3 className={`font-semibold ${th.textPrimary}`}>💬 Message automatique hors ligne</h3><p className={`text-xs ${th.textSecondary}`}>Ce message sera affiché automatiquement si vous ne répondez pas dans les 10 minutes.</p><Textarea placeholder="Ex: Je suis actuellement indisponible. Je vous répondrai dès que possible." value={autoReplyMsg} onChange={e => setAutoReplyMsg(e.target.value)} rows={2} /><Button className={`${th.primary} ${th.primaryText}`} onClick={handleSaveAutoReply} disabled={autoReplyLoading} size="sm">{autoReplyLoading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}{t('save')}</Button></CardContent></Card>
+        {/* Account deletion */}
+        <Card className="border-red-200"><CardContent className="pt-6 space-y-3"><h3 className="font-semibold text-red-600 flex items-center gap-2"><Trash2 className="h-4 w-4" />Supprimer mon compte</h3>{(user as any)?.deletionRequestedAt ? <><Alert><AlertTriangle className="h-4 w-4" /><AlertTitle>Demande en cours</AlertTitle><AlertDescription>Votre demande de suppression est en attente de traitement par l'admin.</AlertDescription></Alert><Button variant="outline" className="border-red-200 text-red-600" onClick={() => void handleCancelDeletion()} size="sm">Annuler la demande</Button></> : <><p className={`text-sm ${th.textSecondary}`}>Si vous souhaitez supprimer votre compte, expliquez pourquoi. L'admin traitera votre demande.</p><Textarea placeholder="Expliquez pourquoi vous souhaitez supprimer votre compte..." value={deletionReason} onChange={e => setDeletionReason(e.target.value)} rows={2} /><Button className="bg-red-600 hover:bg-red-700 text-white" onClick={() => void handleRequestDeletion()} disabled={deletionLoading} size="sm">{deletionLoading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Trash2 className="h-3 w-3 mr-1" />}Demander la suppression</Button></>}</CardContent></Card>
         <Button variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50" onClick={logout}><LogOut className="h-4 w-4 mr-1" />{t('logout')}</Button>
       </div>
       {renderBottomNav('settings')}
@@ -940,7 +1021,7 @@ export default function VServiceRDC() {
       </div>
       <div className="max-w-4xl mx-auto px-4 mt-6"><Tabs value={adminTab} onValueChange={setAdminTab}><TabsList className="w-full grid grid-cols-4 mb-4"><TabsTrigger value="validation">{t('validation')}</TabsTrigger><TabsTrigger value="utilisateurs">{t('users')}</TabsTrigger><TabsTrigger value="annonces">{t('announcements')}</TabsTrigger><TabsTrigger value="messages">{t('messages')}</TabsTrigger></TabsList>
         <TabsContent value="validation"><Card><CardHeader><CardTitle>{t('pending')}</CardTitle></CardHeader><CardContent><div className="space-y-3 max-h-96 overflow-y-auto">{adminUsers.filter(u => u.status === 'pending').map(u => (<div key={u.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100"><div className="flex items-center gap-3"><Avatar className="h-10 w-10"><AvatarFallback className={theme === 'red' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}>{getInitials(u.profile?.fullName || u.profile?.companyName || 'U')}</AvatarFallback></Avatar><div><p className="font-medium text-sm">{u.profile?.companyName || u.profile?.fullName || u.phone}</p><p className="text-xs text-gray-500">{u.role}</p></div></div><div className="flex gap-1"><Button size="sm" variant="outline" className={theme === 'red' ? 'text-red-600 border-red-200' : 'text-emerald-600 border-emerald-200'} onClick={() => handleAdminAction(u.id, 'approve')}><Check className="h-3 w-3" /></Button><Button size="sm" variant="outline" className="text-red-600 border-red-200" onClick={() => handleAdminAction(u.id, 'reject')}><X className="h-3 w-3" /></Button></div></div>))}{adminUsers.filter(u => u.status === 'pending').length === 0 && <p className="text-center text-gray-400 py-8">Aucun</p>}</div></CardContent></Card></TabsContent>
-        <TabsContent value="utilisateurs"><Card><CardHeader><CardTitle>{t('users')}</CardTitle></CardHeader><CardContent><div className="grid grid-cols-2 gap-3 mb-4"><Select value={adminRoleFilter} onValueChange={setAdminRoleFilter}><SelectTrigger className="w-full text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tous</SelectItem><SelectItem value="CLIENT">Clients</SelectItem><SelectItem value="PRESTATAIRE">Prestataires</SelectItem><SelectItem value="ENTREPRISE">Entreprises</SelectItem></SelectContent></Select><Select value={adminStatusFilter} onValueChange={setAdminStatusFilter}><SelectTrigger className="w-full text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tous</SelectItem><SelectItem value="approved">Approuvés</SelectItem><SelectItem value="pending">En attente</SelectItem><SelectItem value="suspended">Suspendus</SelectItem></SelectContent></Select></div><div className="space-y-3 max-h-[500px] overflow-y-auto">{adminUsers.map(u => (<div key={u.id} className="cursor-pointer p-3 rounded-lg border border-gray-100 hover:shadow-sm" onClick={() => { setUserDetailData(u); setUserDetailOpen(true) }}><div className="flex items-center justify-between"><div className="flex items-center gap-3 min-w-0"><Avatar className="h-10 w-10"><AvatarFallback className={theme === 'red' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}>{getInitials(u.profile?.companyName || u.profile?.fullName || 'U')}</AvatarFallback></Avatar><div className="min-w-0"><p className={`font-semibold text-sm ${th.textPrimary} truncate`}>{u.profile?.companyName || u.profile?.fullName || u.phone}</p><div className="flex items-center gap-2"><span className="text-xs text-gray-500">{u.phone}</span><Badge variant="secondary" className="text-[10px]">{u.role}</Badge>{getStatusBadge(u.status, theme)}</div></div></div><div className="flex gap-1" onClick={e => e.stopPropagation()}><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="sm"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => { setUserDetailData(u); setUserDetailOpen(true) }}><IdCard className="h-4 w-4 mr-2" />{t('userDetails')}</DropdownMenuItem>{u.status === 'pending' && <><DropdownMenuItem onClick={() => handleAdminAction(u.id, 'approve')}><CheckCircle className="h-4 w-4 mr-2" />{t('approve')}</DropdownMenuItem><DropdownMenuItem onClick={() => handleAdminAction(u.id, 'reject')}><XCircle className="h-4 w-4 mr-2" />{t('reject')}</DropdownMenuItem></>}{u.status === 'approved' && <DropdownMenuItem onClick={() => { setSuspendUserId(u.id); setSuspendDialogOpen(true) }}><Ban className="h-4 w-4 mr-2" />{t('suspend')}</DropdownMenuItem>}<DropdownMenuItem onClick={() => handleDeleteUser(u.id)} className="text-red-600"><Trash2 className="h-4 w-4 mr-2" />{t('delete')}</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></div></div>))}</div></CardContent></Card></TabsContent>
+        <TabsContent value="utilisateurs"><Card><CardHeader><CardTitle>{t('users')}</CardTitle></CardHeader><CardContent><div className="grid grid-cols-2 gap-3 mb-4"><Select value={adminRoleFilter} onValueChange={setAdminRoleFilter}><SelectTrigger className="w-full text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tous</SelectItem><SelectItem value="CLIENT">Clients</SelectItem><SelectItem value="PRESTATAIRE">Prestataires</SelectItem><SelectItem value="ENTREPRISE">Entreprises</SelectItem></SelectContent></Select><Select value={adminStatusFilter} onValueChange={setAdminStatusFilter}><SelectTrigger className="w-full text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tous</SelectItem><SelectItem value="approved">Approuvés</SelectItem><SelectItem value="pending">En attente</SelectItem><SelectItem value="suspended">Suspendus</SelectItem></SelectContent></Select></div><div className="space-y-3 max-h-[500px] overflow-y-auto">{adminUsers.map(u => (<div key={u.id} className="cursor-pointer p-3 rounded-lg border border-gray-100 hover:shadow-sm" onClick={() => { setUserDetailData(u); setUserDetailOpen(true) }}><div className="flex items-center justify-between"><div className="flex items-center gap-3 min-w-0"><Avatar className="h-10 w-10"><AvatarFallback className={theme === 'red' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}>{getInitials(u.profile?.companyName || u.profile?.fullName || 'U')}</AvatarFallback></Avatar><div className="min-w-0"><p className={`font-semibold text-sm ${th.textPrimary} truncate`}>{u.profile?.companyName || u.profile?.fullName || u.phone}</p><div className="flex items-center gap-2"><span className="text-xs text-gray-500">{u.phone}</span><Badge variant="secondary" className="text-[10px]">{u.role}</Badge>{getStatusBadge(u.status, theme)}{u.deletionReason && <Badge className="bg-red-100 text-red-700 text-[10px] ml-1">🗑️ Suppression</Badge>}</div>{u.deletionReason && <p className="text-xs text-red-500 mt-0.5 truncate">Raison: {u.deletionReason}</p>}</div></div><div className="flex gap-1" onClick={e => e.stopPropagation()}><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="sm"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => { setUserDetailData(u); setUserDetailOpen(true) }}><IdCard className="h-4 w-4 mr-2" />{t('userDetails')}</DropdownMenuItem>{u.status === 'pending' && <><DropdownMenuItem onClick={() => handleAdminAction(u.id, 'approve')}><CheckCircle className="h-4 w-4 mr-2" />{t('approve')}</DropdownMenuItem><DropdownMenuItem onClick={() => handleAdminAction(u.id, 'reject')}><XCircle className="h-4 w-4 mr-2" />{t('reject')}</DropdownMenuItem></>}{u.status === 'approved' && <DropdownMenuItem onClick={() => { setSuspendUserId(u.id); setSuspendDialogOpen(true) }}><Ban className="h-4 w-4 mr-2" />{t('suspend')}</DropdownMenuItem>}<DropdownMenuItem onClick={() => handleDeleteUser(u.id)} className="text-red-600"><Trash2 className="h-4 w-4 mr-2" />{t('delete')}</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></div></div>))}</div></CardContent></Card></TabsContent>
         <TabsContent value="annonces"><Card><CardHeader><CardTitle>{t('newAnnouncement')}</CardTitle></CardHeader><CardContent className="space-y-4"><div className="space-y-2"><Label>{t('title')}</Label><Input value={annTitle} onChange={e => setAnnTitle(e.target.value)} /></div><div className="space-y-2"><Label>{t('message')}</Label><Textarea value={annMessage} onChange={e => setAnnMessage(e.target.value)} rows={3} /></div><Button className={`${th.primary} ${th.primaryText}`} onClick={handleSendAnnouncement} disabled={annLoading}>{annLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}{t('send')}</Button></CardContent></Card></TabsContent>
         <TabsContent value="messages"><Card><CardHeader><CardTitle>{t('contactMessages')}</CardTitle></CardHeader><CardContent><div className="space-y-3 max-h-96 overflow-y-auto">{adminMessages.map((m: any) => (<div key={m.id} className="p-3 rounded-lg border border-gray-100"><div className="flex items-center justify-between mb-1"><div><h4 className="font-medium text-sm">{m.name}</h4><p className="text-xs text-gray-500">{m.email}</p></div>{m.replied ? <Badge className={theme === 'red' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}>{t('replied')}</Badge> : <Badge variant="outline">{t('notReplied')}</Badge>}</div><p className={`text-sm ${th.textSecondary} mt-1`}>{m.message}</p>{!m.reply && <div className="flex gap-2 mt-2"><Input placeholder={t('yourReply')} value={replyMsgId === m.id ? replyText : ''} onChange={e => { setReplyMsgId(m.id); setReplyText(e.target.value) }} className="flex-1 text-sm" /><Button size="sm" className={`${th.primary} ${th.primaryText}`} onClick={() => { setReplyMsgId(m.id); handleReplyMessage() }} disabled={replyLoading || !replyText}><Send className="h-3 w-3" /></Button></div>}</div>))}</div></CardContent></Card></TabsContent>
       </Tabs></div>
