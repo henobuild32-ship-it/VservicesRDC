@@ -54,6 +54,15 @@ export async function PUT(req: NextRequest) {
       },
     });
 
+    await db.adminAction.create({
+      data: {
+        adminId: session.userId,
+        action: `user_${action}`,
+        targetId: userId,
+        details: `Utilisateur ${action === 'approve' ? 'approuvé' : action === 'reject' ? 'rejeté' : action === 'suspend' ? 'suspendu' : 'réactivé'}${reason ? `: ${reason}` : ''}`,
+      },
+    });
+
     return NextResponse.json({ success: true, status: newStatus });
   } catch (error) {
     console.error('Validate error:', error);

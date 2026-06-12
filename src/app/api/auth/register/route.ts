@@ -36,8 +36,8 @@ function mapProfile(user: any) {
     return {
       companyName: user.companyProfile?.companyName || null, logo: user.companyProfile?.logoUrl || null,
       coverPhoto: user.companyProfile?.coverPhotoUrl || null, sector: user.companyProfile?.sector || null,
-      services, companyType: user.companyProfile?.companyType || null,
-      employeeCount: user.companyProfile?.employeeCount || null, website: user.companyProfile?.website || null,
+      services,       companyType: user.companyProfile?.companyType || null,
+      employeeCount: user.companyProfile?.employeeCount || null, description: user.companyProfile?.description || null, website: user.companyProfile?.website || null,
       fullAddress: user.companyProfile?.fullAddress || null, province: user.companyProfile?.province || null,
       commune: user.companyProfile?.commune || null, nationalScope: user.companyProfile?.nationalScope || false, socialMedia,
     };
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     }
 
     const hashedPassword = await hashPassword(password);
-    const status = 'approved'; // Auto-approve all accounts
+    const status = 'pending'; // Admin must validate
 
     const user = await db.user.create({
       data: {
@@ -124,6 +124,7 @@ export async function POST(req: NextRequest) {
           employeeCount: profile.employeeCount || null,
           website: profile.website || null,
           fullAddress: profile.fullAddress || null,
+          description: profile.description || null,
           services: Array.isArray(profile.services) ? JSON.stringify(profile.services) : null,
           province: profile.province || null,
           commune: profile.commune || null,
@@ -148,6 +149,12 @@ export async function POST(req: NextRequest) {
         email: user.email,
         role: user.role,
         status: user.status,
+        certified: user.certified,
+        certificationStatus: user.certificationStatus,
+        certificationMessage: user.certificationMessage,
+        autoReplyMessage: user.autoReplyMessage,
+        deletionReason: user.deletionReason,
+        deletionRequestedAt: user.deletionRequestedAt || null,
         profile: mapProfile(userWithProfile),
       },
       token,

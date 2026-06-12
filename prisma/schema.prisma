@@ -3,53 +3,38 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id            String   @id @default(cuid())
-  phone         String   @unique
-  password      String
-  email         String?
-  role          String   @default("CLIENT") // CLIENT, PRESTATAIRE, ENTREPRISE, ADMIN
-  status        String   @default("approved") // pending, approved, rejected, suspended
-  autoReplyMessage String? // Custom auto-reply when user is offline
-  deletionReason String? // Reason for account deletion request
-  deletionRequestedAt DateTime? // When user requested deletion
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  phone              String   @unique
+  password           String
+  email              String?
+  role               String   @default("CLIENT") // CLIENT, PRESTATAIRE, ENTREPRISE, ADMIN
+  status             String   @default("approved") // pending, approved, rejected, suspended
+  autoReplyMessage   String? 
+  deletionReason     String? 
+  deletionRequestedAt DateTime?
+  certified          Boolean  @default(false)
+  certificationStatus String? // "pending" | "rejected" | null (null = none/approved)
+  certificationMessage String?
+  certificationRequestedAt DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  // Client profile
-  clientProfile  ClientProfile?
-  
-  // Provider profile
-  providerProfile ProviderProfile?
-
-  // Company profile
-  companyProfile  CompanyProfile?
-
-  // Reviews written by this user (as client)
-  reviewsWritten  Review[]
-
-  // Reviews received (as provider/company)
-  reviewsReceived Review[]  @relation("ReviewedUser")
-
-  // Notifications received
-  notifications   Notification[]
-
-  // Contact messages sent
-  contactMessages ContactMessage[]
-
-  // Announcements sent by admin
-  announcementsSent AdminAnnouncement[] @relation("AnnouncementAuthor")
-
-  // Conversations
-  conversations1 Conversation[] @relation("ConvParticipant1")
-  conversations2 Conversation[] @relation("ConvParticipant2")
-
-  // Chat messages sent
-  chatMessages ChatMessage[]
+  clientProfile      ClientProfile?
+  providerProfile    ProviderProfile?
+  companyProfile     CompanyProfile?
+  reviewsWritten     Review[]
+  reviewsReceived    Review[]  @relation("ReviewedUser")
+  notifications      Notification[]
+  contactMessages    ContactMessage[]
+  announcementsSent  AdminAnnouncement[] @relation("AnnouncementAuthor")
+  conversations1     Conversation[] @relation("ConvParticipant1")
+  conversations2     Conversation[] @relation("ConvParticipant2")
+  chatMessages       ChatMessage[]
 }
 
 model ClientProfile {
@@ -63,57 +48,59 @@ model ClientProfile {
 }
 
 model ProviderProfile {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  fullName        String
-  email           String
-  phone           String
-  photoUrl        String?
-  sector          String
-  service         String
-  services        String?  // JSON array for multiple services
-  province        String?
-  commune         String?
-  description     String?
-  socialMedia     String?  // JSON string for social links
-  nationalScope   Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  fullName      String
+  email         String
+  phone         String
+  photoUrl      String?
+  sector        String
+  service       String
+  services      String?  // JSON array
+  province      String?
+  commune       String?
+  description   String?
+  socialMedia   String?  // JSON string
+  nationalScope Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model CompanyProfile {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  companyName     String
-  email           String
-  phone           String
-  logoUrl         String?
-  coverPhotoUrl   String?
-  sector          String
-  companyType     String   @default("individuelle") // individuelle, avec_employes
-  employeeCount   Int?
-  website         String?
-  fullAddress     String?
-  services        String?  // JSON string for multiple services
-  province        String?
-  commune         String?
-  socialMedia     String?  // JSON string for social links
-  nationalScope   Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  companyName   String
+  email         String
+  phone         String
+  logoUrl       String?
+  coverPhotoUrl String?
+  sector        String
+  companyType   String   @default("individuelle")
+  employeeCount Int?
+  website       String?
+  fullAddress   String?
+  description   String?
+  services      String?
+  province      String?
+  commune       String?
+  socialMedia   String?
+  nationalScope Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Review {
   id          String   @id @default(cuid())
   authorId    String
-  targetId    String   // the user being reviewed
-  targetType  String   // "PRESTATAIRE" or "ENTREPRISE"
-  rating      Int      // 1-5
+  targetId    String
+  targetType  String
+  rating      Int
   comment     String?
+  hidden      Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -126,7 +113,7 @@ model Notification {
   userId    String
   title     String
   message   String
-  type      String   @default("info") // info, warning, announcement
+  type      String   @default("info")
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -154,8 +141,8 @@ model AdminAnnouncement {
   authorId    String
   title       String
   message     String
-  targetType  String   // "all_prestataires", "all_entreprises", "all_providers", "all_clients", "specific"
-  targetId    String?  // for specific targeting
+  targetType  String
+  targetId    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -189,4 +176,19 @@ model ChatMessage {
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+model PlatformSetting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
+
+model AdminAction {
+  id         String   @id @default(cuid())
+  adminId    String
+  action     String
+  targetId   String?
+  details    String?
+  createdAt  DateTime @default(now())
 }

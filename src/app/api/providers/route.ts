@@ -8,11 +8,12 @@ function mapProviderProfile(user: any) {
     if (pp.socialMedia) {
       try { socialMedia = JSON.parse(pp.socialMedia); } catch { socialMedia = null; }
     }
-    return {
-      fullName: pp.fullName || null,
-      photo: pp.photoUrl || null,
-      logo: null,
-      sector: pp.sector || null,
+      return {
+        certified: user.certified || false,
+        fullName: pp.fullName || null,
+        photo: pp.photoUrl || null,
+        logo: null,
+        sector: pp.sector || null,
       services: pp.services ? (() => { try { return JSON.parse(pp.services); } catch { return pp.service ? [pp.service] : []; } })() : (pp.service ? [pp.service] : []),
       province: pp.province || null,
       commune: pp.commune || null,
@@ -36,6 +37,7 @@ function mapProviderProfile(user: any) {
       try { socialMedia = JSON.parse(cp.socialMedia); } catch { socialMedia = null; }
     }
     return {
+      certified: user.certified || false,
       fullName: null,
       photo: null,
       logo: cp.logoUrl || null,
@@ -45,7 +47,7 @@ function mapProviderProfile(user: any) {
       province: cp.province || null,
       commune: cp.commune || null,
       nationalScope: cp.nationalScope || false,
-      description: null,
+      description: cp.description || null,
       website: cp.website || null,
       socialMedia,
       companyName: cp.companyName || null,
@@ -68,6 +70,8 @@ export async function GET(req: NextRequest) {
     const type = searchParams.get('type');
     const role = searchParams.get('role');
     const userId = searchParams.get('userId');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')));
 
     if (userId) {
       // Get a specific provider/company
@@ -104,6 +108,7 @@ export async function GET(req: NextRequest) {
         email: user.email,
         role: user.role,
         status: user.status,
+        certified: user.certified || false,
         autoReplyMessage: user.autoReplyMessage || null,
         profile: mapProviderProfile(user),
         reviews,
@@ -150,6 +155,7 @@ export async function GET(req: NextRequest) {
         email: user.email,
         role: user.role,
         status: user.status,
+        certified: user.certified || false,
         profile: mapProviderProfile(user),
         avgRating: avgRating ? Math.round(avgRating * 10) / 10 : null,
         reviewCount: user.reviewsReceived.length,
@@ -181,7 +187,12 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ results });
+    const total = results.length;
+    const totalPages = Math.ceil(total / limit);
+    const start = (page - 1) * limit;
+    const paged = results.slice(start, start + limit);
+
+    return NextResponse.json({ results: paged, total, totalPages, page, limit });
   } catch (error) {
     console.error('Providers search error:', error);
     return NextResponse.json({ error: 'Erreur de recherche' }, { status: 500 });
