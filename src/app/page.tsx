@@ -397,6 +397,8 @@ export default function VServiceRDC() {
         // Auto-login after registration
         localStorage.setItem('vservicerdc_token', data.token); setToken(data.token)
         setUser({ id: data.user.id, phone: data.user.phone, email: data.user.email, role: data.user.role as AccountType, status: data.user.status, certified: data.user.certified, certificationStatus: data.user.certificationStatus, certificationMessage: data.user.certificationMessage, autoReplyMessage: data.user.autoReplyMessage, deletionReason: data.user.deletionReason, deletionRequestedAt: data.user.deletionRequestedAt, profile: data.user.profile || undefined })
+        // Refresh profile to get uploaded photo URLs
+        fetchUserProfile()
         const regRole = data.user.role as AccountType
         if (regRole === 'CLIENT') navigate('client-dashboard'); else if (regRole === 'PRESTATAIRE') navigate('prestataire-dashboard'); else if (regRole === 'ENTREPRISE') navigate('entreprise-dashboard')
       } else toast({ title: "Erreur", description: data.message || data.error || 'Erreur.', variant: 'destructive' })
@@ -708,9 +710,14 @@ export default function VServiceRDC() {
   // ============================================================
   // BOTTOM NAV
   // ============================================================
+  const getHomeView = (): ViewName => {
+    if (user?.role === 'PRESTATAIRE') return 'prestataire-dashboard'
+    if (user?.role === 'ENTREPRISE') return 'entreprise-dashboard'
+    return 'client-dashboard'
+  }
   const renderBottomNav = (activeTab: string) => {
     const items = [
-      { id: 'home', view: 'client-dashboard' as ViewName, icon: <Home className="h-5 w-5" />, label: t('search') },
+      { id: 'home', view: getHomeView(), icon: <Home className="h-5 w-5" />, label: t('search') },
       { id: 'search', view: 'browse-sectors' as ViewName, icon: <Search className="h-5 w-5" />, label: t('sector') },
       { id: 'chat', view: 'chat' as ViewName, icon: <MessageSquare className="h-5 w-5" />, label: t('chat') },
       { id: 'notifications', view: 'notifications' as ViewName, icon: <Bell className="h-5 w-5" />, label: t('notifications') },
@@ -720,7 +727,7 @@ export default function VServiceRDC() {
       <nav className={`fixed bottom-0 left-0 right-0 ${th.navBg} ${th.navBorder} border-t z-50 safe-area-pb`}>
         <div className="max-w-lg mx-auto flex items-center justify-around py-2 px-2">
           {items.map(item => (
-            <button key={item.id} onClick={() => navigate(item.view)} className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-colors ${activeTab === item.view || (item.id === 'home' && activeTab === 'client-dashboard') ? th.navActive : th.navInactive}`}>
+            <button key={item.id} onClick={() => navigate(item.view)} className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-colors ${activeTab === item.view || (item.id === 'home' && (activeTab === 'client-dashboard' || activeTab === 'prestataire-dashboard' || activeTab === 'entreprise-dashboard')) ? th.navActive : th.navInactive}`}>
               <div className="relative">{item.icon}{item.id === 'notifications' && unreadCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}{item.id === 'chat' && conversations.filter(c => c.unreadCount > 0).length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">!</span>}</div>
               <span className="text-[10px] font-medium">{item.label}</span>
             </button>
