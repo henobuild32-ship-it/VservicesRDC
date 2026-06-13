@@ -192,6 +192,63 @@ export default function VServiceRDC() {
   const [realisations, setRealisations] = useState<any[]>([])
   const [providerRealisations, setProviderRealisations] = useState<any[]>([])
   const [realOpen, setRealOpen] = useState(false); const [realTitle, setRealTitle] = useState(''); const [realDesc, setRealDesc] = useState(''); const [realMedia, setRealMedia] = useState<string[]>([]); const [realMediaType, setRealMediaType] = useState('image'); const [realBefore, setRealBefore] = useState(''); const [realAfter, setRealAfter] = useState(''); const [realLocation, setRealLocation] = useState(''); const [realDate, setRealDate] = useState(''); const [realLoading, setRealLoading] = useState(false)
+  const handleRealFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files; if (!files) return; const newMedia: string[] = []
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]; const reader = new FileReader()
+      const dataUrl = await new Promise<string>((resolve) => {
+        reader.onload = () => {
+          const img = new window.Image(); img.onload = () => {
+            const canvas = document.createElement('canvas'); const maxW = 800; const ratio = img.width > maxW ? maxW / img.width : 1
+            canvas.width = img.width * ratio; canvas.height = img.height * ratio
+            canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height)
+            resolve(canvas.toDataURL('image/jpeg', 0.8))
+          }; img.src = reader.result as string
+        }; reader.readAsDataURL(file)
+      }); newMedia.push(dataUrl)
+    }
+    setRealMedia(p => [...p, ...newMedia].slice(0, 10))
+    e.target.value = ''
+  }
+  const renderRealisationDialog = () => (
+    <Dialog open={realOpen} onOpenChange={setRealOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Ajouter une realisation</DialogTitle></DialogHeader>
+        <div className="space-y-3 py-2 max-h-[70vh] overflow-y-auto">
+          <div className="space-y-1.5"><Label className="text-xs">Titre *</Label><Input value={realTitle} onChange={e => setRealTitle(e.target.value)} className="text-sm h-9" /></div>
+          <div className="space-y-1.5"><Label className="text-xs">Description</Label><Textarea value={realDesc} onChange={e => setRealDesc(e.target.value)} rows={2} className="text-sm" /></div>
+          <div className="space-y-1.5"><Label className="text-xs">Type de media</Label><Select value={realMediaType} onValueChange={setRealMediaType}><SelectTrigger className="w-full text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="image">Image</SelectItem><SelectItem value="album">Album photos</SelectItem><SelectItem value="video">Video</SelectItem><SelectItem value="beforeafter">Avant / Apres</SelectItem></SelectContent></Select></div>
+          {realMediaType === 'beforeafter' ? (
+            <><div className="space-y-1.5"><Label className="text-xs">Photo avant</Label><Input type="text" placeholder="URL de la photo avant" value={realBefore} onChange={e => setRealBefore(e.target.value)} className="text-sm h-9" /></div>
+            <div className="space-y-1.5"><Label className="text-xs">Photo apres</Label><Input type="text" placeholder="URL de la photo apres" value={realAfter} onChange={e => setRealAfter(e.target.value)} className="text-sm h-9" /></div></>
+          ) : (
+            <><div className="space-y-1.5"><Label className="text-xs">Photos / Videos</Label>
+              <label className="cursor-pointer block"><input type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleRealFileUpload} />
+              <div className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-lg p-3 hover:border-emerald-400 transition-colors"><Upload className="h-4 w-4 text-gray-400" /><span className="text-xs text-gray-500">Choisir depuis la galerie</span></div></label>
+              {realMedia.length > 0 && <div className="grid grid-cols-3 gap-2 mt-2">{realMedia.map((m, i) => <div key={i} className="relative group"><img src={m} className="w-full h-16 object-cover rounded" alt="" /><button onClick={() => setRealMedia(p => p.filter((_, j) => j !== i))} className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]"><X className="h-2.5 w-2.5" /></button></div>)}</div>}
+            </div></>
+          )}
+          <div className="space-y-1.5"><Label className="text-xs">Localisation</Label><Input value={realLocation} onChange={e => setRealLocation(e.target.value)} placeholder="Ville, province..." className="text-sm h-9" /></div>
+          <div className="space-y-1.5"><Label className="text-xs">Date de realisation</Label><Input type="date" value={realDate} onChange={e => setRealDate(e.target.value)} className="text-sm h-9" /></div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => setRealOpen(false)}>Annuler</Button>
+          <Button size="sm" className={'text-xs h-8 ' + th.primary + ' ' + th.primaryText} onClick={async () => {
+            if (!realTitle.trim()) { toast({ title: 'Erreur', description: 'Titre requis', variant: 'destructive' }); return }
+            setRealLoading(true)
+            try {
+              const body: any = { title: realTitle, description: realDesc || null, mediaType: realMediaType }
+              if (realMediaType === 'beforeafter') { body.beforePhoto = realBefore || null; body.afterPhoto = realAfter || null } else { body.media = realMedia }
+              if (realLocation) body.location = realLocation; if (realDate) body.date = realDate
+              const r = await fetch('/api/realisations', { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) })
+              if (r.ok) { toast({ title: 'Realisation ajoutee' }); setRealOpen(false); setRealTitle(''); setRealDesc(''); setRealMedia([]); setRealLocation(''); setRealDate(''); fetchRealisations() } else toast({ title: 'Erreur', variant: 'destructive' })
+            } catch { toast({ title: 'Erreur', variant: 'destructive' }) }
+            setRealLoading(false)
+          }} disabled={realLoading}>{realLoading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}Ajouter</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
   // Experience & Availability
   const [editExperience, setEditExperience] = useState(''); const [editAvailability, setEditAvailability] = useState('')
   const [regExperience, setRegExperience] = useState(''); const [regAvailability, setRegAvailability] = useState('')
@@ -1131,7 +1188,7 @@ export default function VServiceRDC() {
         {renderBottomNav('prestataire-dashboard')}
       </div>
       {/* Realisation add dialog */}
-      <Dialog open={realOpen} onOpenChange={setRealOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Ajouter une realisation</DialogTitle></DialogHeader><div className="space-y-3 py-2 max-h-[70vh] overflow-y-auto"><div className="space-y-1.5"><Label className="text-xs">Titre *</Label><Input value={realTitle} onChange={e => setRealTitle(e.target.value)} className="text-sm h-9" /></div><div className="space-y-1.5"><Label className="text-xs">Description</Label><Textarea value={realDesc} onChange={e => setRealDesc(e.target.value)} rows={2} className="text-sm" /></div><div className="space-y-1.5"><Label className="text-xs">Type de media</Label><Select value={realMediaType} onValueChange={setRealMediaType}><SelectTrigger className="w-full text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="image">Image</SelectItem><SelectItem value="album">Album photos</SelectItem><SelectItem value="video">Video</SelectItem><SelectItem value="beforeafter">Avant / Apres</SelectItem></SelectContent></Select></div>{realMediaType === 'beforeafter' ? <><div className="space-y-1.5"><Label className="text-xs">Photo avant</Label><Input type="text" placeholder="URL de la photo avant" value={realBefore} onChange={e => setRealBefore(e.target.value)} className="text-sm h-9" /></div><div className="space-y-1.5"><Label className="text-xs">Photo après</Label><Input type="text" placeholder="URL de la photo après" value={realAfter} onChange={e => setRealAfter(e.target.value)} className="text-sm h-9" /></div></> : <div className="space-y-1.5"><Label className="text-xs">URL du media</Label><Input type="text" placeholder="https://..." value={realMedia[0] || ''} onChange={e => setRealMedia([e.target.value])} className="text-sm h-9" /></div>}<div className="space-y-1.5"><Label className="text-xs">Localisation</Label><Input value={realLocation} onChange={e => setRealLocation(e.target.value)} placeholder="Ville, province..." className="text-sm h-9" /></div><div className="space-y-1.5"><Label className="text-xs">Date de réalisation</Label><Input type="date" value={realDate} onChange={e => setRealDate(e.target.value)} className="text-sm h-9" /></div></div><DialogFooter><Button variant="outline" size="sm" className="text-xs h-8" onClick={() => setRealOpen(false)}>Annuler</Button><Button size="sm" className={'text-xs h-8 ' + th.primary + ' ' + th.primaryText} onClick={async () => { if (!realTitle.trim()) { toast({ title: 'Erreur', description: 'Titre requis', variant: 'destructive' }); return }; setRealLoading(true); try { const body: any = { title: realTitle, description: realDesc || null, mediaType: realMediaType }; if (realMediaType === 'beforeafter') { body.beforePhoto = realBefore || null; body.afterPhoto = realAfter || null } else { body.media = realMedia } if (realLocation) body.location = realLocation; if (realDate) body.date = realDate; const r = await fetch('/api/realisations', { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) }); if (r.ok) { toast({ title: 'Realisation ajoutee' }); setRealOpen(false); fetchRealisations() } else toast({ title: 'Erreur', variant: 'destructive' }) } catch { toast({ title: 'Erreur', variant: 'destructive' }) }; setRealLoading(false) }} disabled={realLoading}>{realLoading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}Ajouter</Button></DialogFooter></DialogContent></Dialog>
+      {renderRealisationDialog()}
     </>)
   }
 
@@ -1223,8 +1280,9 @@ export default function VServiceRDC() {
         </div>
         {renderBottomNav('entreprise-dashboard')}
       </div>
-      {/* Realisation add dialog */}
-      <Dialog open={realOpen} onOpenChange={setRealOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Ajouter une realisation</DialogTitle></DialogHeader><div className="space-y-3 py-2 max-h-[70vh] overflow-y-auto"><div className="space-y-1.5"><Label className="text-xs">Titre *</Label><Input value={realTitle} onChange={e => setRealTitle(e.target.value)} className="text-sm h-9" /></div><div className="space-y-1.5"><Label className="text-xs">Description</Label><Textarea value={realDesc} onChange={e => setRealDesc(e.target.value)} rows={2} className="text-sm" /></div><div className="space-y-1.5"><Label className="text-xs">Type de media</Label><Select value={realMediaType} onValueChange={setRealMediaType}><SelectTrigger className="w-full text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="image">Image</SelectItem><SelectItem value="album">Album photos</SelectItem><SelectItem value="video">Video</SelectItem><SelectItem value="beforeafter">Avant / Apres</SelectItem></SelectContent></Select></div>{realMediaType === 'beforeafter' ? <><div className="space-y-1.5"><Label className="text-xs">Photo avant</Label><Input type="text" placeholder="URL de la photo avant" value={realBefore} onChange={e => setRealBefore(e.target.value)} className="text-sm h-9" /></div><div className="space-y-1.5"><Label className="text-xs">Photo après</Label><Input type="text" placeholder="URL de la photo après" value={realAfter} onChange={e => setRealAfter(e.target.value)} className="text-sm h-9" /></div></> : <div className="space-y-1.5"><Label className="text-xs">URL du media</Label><Input type="text" placeholder="https://..." value={realMedia[0] || ''} onChange={e => setRealMedia([e.target.value])} className="text-sm h-9" /></div>}<div className="space-y-1.5"><Label className="text-xs">Localisation</Label><Input value={realLocation} onChange={e => setRealLocation(e.target.value)} placeholder="Ville, province..." className="text-sm h-9" /></div><div className="space-y-1.5"><Label className="text-xs">Date de réalisation</Label><Input type="date" value={realDate} onChange={e => setRealDate(e.target.value)} className="text-sm h-9" /></div></div><DialogFooter><Button variant="outline" size="sm" className="text-xs h-8" onClick={() => setRealOpen(false)}>Annuler</Button><Button size="sm" className={'text-xs h-8 ' + th.primary + ' ' + th.primaryText} onClick={async () => { if (!realTitle.trim()) { toast({ title: 'Erreur', description: 'Titre requis', variant: 'destructive' }); return }; setRealLoading(true); try { const body: any = { title: realTitle, description: realDesc || null, mediaType: realMediaType }; if (realMediaType === 'beforeafter') { body.beforePhoto = realBefore || null; body.afterPhoto = realAfter || null } else { body.media = realMedia } if (realLocation) body.location = realLocation; if (realDate) body.date = realDate; const r = await fetch('/api/realisations', { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) }); if (r.ok) { toast({ title: 'Realisation ajoutee' }); setRealOpen(false); fetchRealisations() } else toast({ title: 'Erreur', variant: 'destructive' }) } catch { toast({ title: 'Erreur', variant: 'destructive' }) }; setRealLoading(false) }} disabled={realLoading}>{realLoading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}Ajouter</Button></DialogFooter></DialogContent></Dialog>
+      {/* Employee add dialog */}
+      <Dialog open={empOpen} onOpenChange={setEmpOpen}><DialogContent className="max-w-sm"><DialogHeader><DialogTitle>Ajouter un collaborateur</DialogTitle></DialogHeader><div className="space-y-3 py-2"><div className="space-y-1.5"><Label className="text-xs">Nom complet *</Label><Input value={empName} onChange={e => setEmpName(e.target.value)} className="text-sm h-9" placeholder="Jean Dupont" /></div><div className="space-y-1.5"><Label className="text-xs">Fonction *</Label><Input value={empFunction} onChange={e => setEmpFunction(e.target.value)} className="text-sm h-9" placeholder="Ex: Web Designer, Commercial..." /></div><div className="space-y-1.5"><Label className="text-xs">Telephone</Label><Input value={empPhone} onChange={e => setEmpPhone(formatPhone(e.target.value))} className="text-sm h-9" placeholder="+243 XXX XXX XXX" /></div><div className="space-y-1.5"><Label className="text-xs">Email</Label><Input type="email" value={empEmail} onChange={e => setEmpEmail(e.target.value)} className="text-sm h-9" placeholder="email@exemple.com" /></div></div><DialogFooter><Button variant="outline" size="sm" className="text-xs h-8" onClick={() => setEmpOpen(false)}>Annuler</Button><Button size="sm" className={'text-xs h-8 ' + th.primary + ' ' + th.primaryText} onClick={async () => { if (!empName.trim() || !empFunction.trim()) { toast({ title: 'Erreur', description: 'Nom et fonction requis', variant: 'destructive' }); return }; setEmpLoading(true); try { await fetch('/api/employees', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ fullName: empName, function: empFunction, phone: empPhone || null, email: empEmail || null }) }); setEmpOpen(false); fetchEmployees(); toast({ title: 'Collaborateur ajouté' }) } catch { toast({ title: 'Erreur', variant: 'destructive' }) }; setEmpLoading(false) }} disabled={empLoading}>{empLoading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}Ajouter</Button></DialogFooter></DialogContent></Dialog>
+      {renderRealisationDialog()}
     </>)
   }
 
