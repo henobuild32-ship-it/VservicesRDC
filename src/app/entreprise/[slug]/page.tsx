@@ -58,7 +58,7 @@ export default function PublicCompanyPage() {
               <div className="flex-1">
                 <h1 className="text-xl font-bold text-gray-900">{p?.companyName}</h1>
                 <p className="text-amber-600 font-medium text-sm">{p?.sector}</p>
-                {data.certified && <Badge className="bg-amber-500 text-white text-[10px] mt-1"><ShieldCheck className="h-3 w-3 mr-0.5" />Certifié</Badge>}
+                {data.certified && <Badge className="bg-[#0095F6] text-white text-[10px] mt-1 rounded-full"><ShieldCheck className="h-3 w-3 mr-0.5" />Certifié</Badge>}
                 {p?.services && p.services.length > 0 && <div className="flex flex-wrap gap-1 mt-2">{p.services.map((s: string) => <Badge key={s} variant="secondary" className="text-xs bg-amber-50 text-amber-700">{s}</Badge>)}</div>}
               </div>
             </div>
