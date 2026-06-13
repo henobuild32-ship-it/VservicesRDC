@@ -3,6 +3,10 @@ import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
 import { createSession } from '@/lib/session';
 
+function makeSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'user';
+}
+
 function mapProfile(user: any) {
   if (user.role === 'CLIENT') {
     return { fullName: user.clientProfile?.fullName || null, email: user.clientProfile?.email || null };
@@ -91,6 +95,7 @@ export async function POST(req: NextRequest) {
       const servicesArr = Array.isArray(profile.services) ? profile.services : [];
       const serviceValue = servicesArr[0] || '';
       const servicesJson = servicesArr.length > 0 ? JSON.stringify(servicesArr) : null;
+      const pSlug = profile.fullName ? makeSlug(profile.fullName) + '-' + user.id.slice(0, 6) : 'prestataire-' + user.id.slice(0, 8);
       await db.providerProfile.create({
         data: {
           userId: user.id,
@@ -98,6 +103,7 @@ export async function POST(req: NextRequest) {
           email: profile.email || email || '',
           phone,
           photoUrl: profile.photo || null,
+          slug: pSlug,
           sector: profile.sector || '',
           service: serviceValue,
           services: servicesJson,
@@ -111,6 +117,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (role === 'ENTREPRISE' && profile) {
+      const eSlug = profile.companyName ? makeSlug(profile.companyName) + '-' + user.id.slice(0, 6) : 'entreprise-' + user.id.slice(0, 8);
       await db.companyProfile.create({
         data: {
           userId: user.id,
@@ -119,6 +126,7 @@ export async function POST(req: NextRequest) {
           phone,
           logoUrl: profile.logo || null,
           coverPhotoUrl: profile.coverPhoto || null,
+          slug: eSlug,
           sector: profile.sector || '',
           companyType: profile.companyType || 'individuelle',
           employeeCount: profile.employeeCount || null,
@@ -137,6 +145,10 @@ export async function POST(req: NextRequest) {
     const token = createSession(user.id, user.role);
 
     // Re-fetch with profiles included
+    await db.userActivity.create({
+      data: { userId: user.id, action: 'register', details: JSON.stringify({ role: user.role, time: new Date().toISOString() }) },
+    });
+
     const userWithProfile = await db.user.findUnique({
       where: { id: user.id },
       include: { clientProfile: true, providerProfile: true, companyProfile: true },

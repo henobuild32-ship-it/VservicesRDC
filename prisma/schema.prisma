@@ -35,6 +35,7 @@ model User {
   conversations1     Conversation[] @relation("ConvParticipant1")
   conversations2     Conversation[] @relation("ConvParticipant2")
   chatMessages       ChatMessage[]
+  activities         UserActivity[]
 }
 
 model ClientProfile {
@@ -54,12 +55,15 @@ model ProviderProfile {
   email         String
   phone         String
   photoUrl      String?
+  slug          String?  @unique
   sector        String
   service       String
   services      String?  // JSON array
   province      String?
   commune       String?
   description   String?
+  experience    String?  // professional experience
+  availability  String?  // availability description
   socialMedia   String?  // JSON string
   nationalScope Boolean  @default(false)
   createdAt     DateTime @default(now())
@@ -76,9 +80,12 @@ model CompanyProfile {
   phone         String
   logoUrl       String?
   coverPhotoUrl String?
+  slug          String?  @unique
   sector        String
   companyType   String   @default("individuelle")
   employeeCount Int?
+  hasEmployees  Boolean  @default(false)
+  documents     String?  // JSON array of document URLs
   website       String?
   fullAddress   String?
   description   String?
@@ -91,6 +98,22 @@ model CompanyProfile {
   updatedAt     DateTime @updatedAt
 
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employees     Employee[]
+}
+
+model Employee {
+  id              String   @id @default(cuid())
+  companyId       String
+  fullName        String
+  function        String
+  phone           String?
+  email           String?
+  photoUrl        String?
+  isManager       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company         CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model Review {
@@ -191,4 +214,32 @@ model AdminAction {
   targetId   String?
   details    String?
   createdAt  DateTime @default(now())
+}
+
+model Realisation {
+  id          String   @id @default(cuid())
+  userId      String
+  userRole    String   // PRESTATAIRE or ENTREPRISE
+  title       String
+  description String?
+  media       String   @default("[]") // JSON array of image/video URLs
+  mediaType   String   @default("image") // image, video, album
+  beforePhoto String?  // before photo for before/after
+  afterPhoto  String?  // after photo for before/after
+  location    String?
+  date        String?  // project date
+  tags        String?  // JSON array of tags
+  hidden      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model UserActivity {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String   // login, logout, profile_update, password_change, etc.
+  details   String?  // JSON with extra info (ip, device, etc.)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -85,6 +85,11 @@ export async function POST(req: NextRequest) {
 
     const token = createSession(user.id, user.role);
 
+    // Log activity
+    await db.userActivity.create({
+      data: { userId: user.id, action: 'login', details: JSON.stringify({ ip, time: new Date().toISOString() }) },
+    });
+
     return NextResponse.json({
       user: {
         id: user.id,

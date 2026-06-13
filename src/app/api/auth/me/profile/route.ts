@@ -3,6 +3,10 @@ import { db } from '@/lib/db';
 import { getSession } from '@/lib/session';
 import { hashPassword } from '@/lib/auth';
 
+function makeSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'user';
+}
+
 export async function PUT(req: NextRequest) {
   try {
     const token = req.headers.get('authorization')?.replace('Bearer ', '');
@@ -36,6 +40,11 @@ export async function PUT(req: NextRequest) {
     if (session.role === 'PRESTATAIRE') {
       const serviceValue = Array.isArray(body.services) && body.services.length > 0 ? body.services[0] : '';
       const servicesJson = Array.isArray(body.services) && body.services.length > 0 ? JSON.stringify(body.services) : null;
+      const existingP = await db.providerProfile.findUnique({ where: { userId: session.userId } });
+      const pSlug = body.fullName && body.fullName !== existingP?.fullName ? makeSlug(body.fullName) + '-' + session.userId.slice(0, 6) : undefined;
+      await db.userActivity.create({
+        data: { userId: session.userId, action: 'profile_update', details: JSON.stringify({ role: session.role, time: new Date().toISOString() }) },
+      });
       await db.providerProfile.upsert({
         where: { userId: session.userId },
         create: {
@@ -43,12 +52,15 @@ export async function PUT(req: NextRequest) {
           fullName: body.fullName || '',
           email: body.email || '',
           phone: body.phone || '',
+          slug: body.fullName ? makeSlug(body.fullName) + '-' + session.userId.slice(0, 6) : 'provider-' + session.userId.slice(0, 8),
           sector: body.sector || '',
           service: serviceValue,
           services: servicesJson,
           province: body.province || null,
           commune: body.commune || null,
           description: body.description || null,
+          experience: body.experience || null,
+          availability: body.availability || null,
           socialMedia: body.socialMedia ? JSON.stringify(body.socialMedia) : null,
           nationalScope: body.nationalScope || false,
         },
@@ -56,12 +68,15 @@ export async function PUT(req: NextRequest) {
           fullName: body.fullName || '',
           email: body.email || '',
           phone: body.phone || '',
+          ...(pSlug ? { slug: pSlug } : {}),
           sector: body.sector || '',
           service: serviceValue,
           services: servicesJson,
           province: body.province || null,
           commune: body.commune || null,
           description: body.description || null,
+          experience: body.experience !== undefined ? body.experience : undefined,
+          availability: body.availability !== undefined ? body.availability : undefined,
           socialMedia: body.socialMedia ? JSON.stringify(body.socialMedia) : null,
           nationalScope: body.nationalScope || false,
         },
@@ -70,6 +85,8 @@ export async function PUT(req: NextRequest) {
     }
 
     if (session.role === 'ENTREPRISE') {
+      const existingC = await db.companyProfile.findUnique({ where: { userId: session.userId } });
+      const eSlug = body.companyName && body.companyName !== existingC?.companyName ? makeSlug(body.companyName) + '-' + session.userId.slice(0, 6) : undefined;
       await db.companyProfile.upsert({
         where: { userId: session.userId },
         create: {
@@ -77,9 +94,11 @@ export async function PUT(req: NextRequest) {
           companyName: body.companyName || '',
           email: body.email || '',
           phone: body.phone || '',
+          slug: body.companyName ? makeSlug(body.companyName) + '-' + session.userId.slice(0, 6) : 'company-' + session.userId.slice(0, 8),
           sector: body.sector || '',
           companyType: body.companyType || 'individuelle',
           employeeCount: body.employeeCount || null,
+          hasEmployees: body.hasEmployees || false,
           website: body.website || null,
           fullAddress: body.fullAddress || null,
           description: body.description || null,
@@ -93,9 +112,11 @@ export async function PUT(req: NextRequest) {
           companyName: body.companyName || '',
           email: body.email || '',
           phone: body.phone || '',
+          ...(eSlug ? { slug: eSlug } : {}),
           sector: body.sector || '',
           companyType: body.companyType || 'individuelle',
           employeeCount: body.employeeCount || null,
+          hasEmployees: body.hasEmployees !== undefined ? body.hasEmployees : undefined,
           website: body.website || null,
           fullAddress: body.fullAddress || null,
           description: body.description || null,
@@ -132,6 +153,10 @@ export async function PATCH(req: NextRequest) {
     await db.user.update({
       where: { id: session.userId },
       data: { password: await hashPassword(body.newPassword) },
+    });
+
+    await db.userActivity.create({
+      data: { userId: session.userId, action: 'password_change', details: JSON.stringify({ time: new Date().toISOString() }) },
     });
 
     return NextResponse.json({ success: true });

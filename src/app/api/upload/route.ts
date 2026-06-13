@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get('file') as File;
-    const type = formData.get('type') as string; // 'provider-photo', 'company-logo', 'company-cover'
+    const type = formData.get('type') as string; // 'provider-photo', 'company-logo', 'company-cover', 'realisation', 'document', 'employee-photo'
 
     if (!file) return NextResponse.json({ error: 'Fichier requis' }, { status: 400 });
 
@@ -47,7 +47,22 @@ export async function POST(req: NextRequest) {
         where: { userId: session.userId },
         data: { coverPhotoUrl: url },
       });
+    } else if (type === 'document') {
+      const existing = await db.companyProfile.findUnique({ where: { userId: session.userId } });
+      let docs: string[] = [];
+      if (existing?.documents) { try { docs = JSON.parse(existing.documents); } catch { docs = []; } }
+      docs.push(url);
+      await db.companyProfile.update({
+        where: { userId: session.userId },
+        data: { documents: JSON.stringify(docs) },
+      });
+    } else if (type === 'employee-photo') {
+      const empId = formData.get('employeeId') as string;
+      if (empId) {
+        await db.employee.update({ where: { id: empId }, data: { photoUrl: url } });
+      }
     }
+    // 'realisation' type just returns URL, caller stores it in media array
 
     return NextResponse.json({ url });
   } catch (error) {
