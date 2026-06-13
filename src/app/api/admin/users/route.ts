@@ -37,6 +37,10 @@ function mapUserProfile(user: any) {
     if (cp.socialMedia) {
       try { socialMedia = JSON.parse(cp.socialMedia); } catch { socialMedia = null; }
     }
+    let documents: string[] = [];
+    if (cp.documents) {
+      try { documents = JSON.parse(cp.documents); } catch { documents = []; }
+    }
     return {
       certified: user.certified || false,
       companyName: cp.companyName || null,
@@ -49,6 +53,12 @@ function mapUserProfile(user: any) {
       commune: cp.commune || null,
       nationalScope: cp.nationalScope || false,
       socialMedia,
+      employeeCount: cp.employeeCount || null,
+      hasEmployees: cp.hasEmployees || false,
+      website: cp.website || null,
+      fullAddress: cp.fullAddress || null,
+      companyType: cp.companyType || null,
+      documents,
     };
   }
   return {};
