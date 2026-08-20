@@ -20,12 +20,13 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {
   title: "VServiceRDC - Trouvez les meilleurs prestataires en RDC",
   description:
-    "VServiceRDC est la première plateforme de mise en relation entre clients et prestataires de services en République Démocratique du Congo. Trouvez les meilleurs prestataires et entreprises près de chez vous.",
+    "VServiceRDC est la première plateforme de mise en relation entre clients et prestataires de services en République Démocratique du Congo. Partenariat stratégique HenoBuild Entreprise × KinMusala. Trouvez les meilleurs prestataires et entreprises près de chez vous.",
   keywords: [
     "VServiceRDC",
     "RDC",
@@ -37,8 +38,11 @@ export const metadata: Metadata = {
     "BTP",
     "technologie",
     "artisanat",
+    "HenoBuild",
+    "KinMusala",
+    "partenariat",
   ],
-  authors: [{ name: "HenoBuild" }],
+  authors: [{ name: "HenoBuild Entreprise × KinMusala" }],
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -52,7 +56,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "VServiceRDC - Trouvez les meilleurs prestataires en RDC",
     description:
-      "La première plateforme de mise en relation entre clients et prestataires de services en RDC.",
+      "La première plateforme de mise en relation entre clients et prestataires de services en RDC. Partenariat stratégique HenoBuild Entreprise × KinMusala.",
     type: "website",
   },
 };

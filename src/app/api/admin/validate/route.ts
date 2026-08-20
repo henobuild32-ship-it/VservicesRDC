@@ -49,7 +49,7 @@ export async function PUT(req: NextRequest) {
       data: {
         userId,
         title: titleMap[action],
-        message: messageMap[action] + '\n\nL\'Équipe HenoBuild',
+        message: messageMap[action] + '\n\nL\'Équipe HenoBuild Entreprise × KinMusala',
         type: action === 'suspend' ? 'warning' : 'info',
       },
     });

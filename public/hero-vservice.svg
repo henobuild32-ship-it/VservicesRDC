@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="900" height="720" viewBox="0 0 900 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ecfdf5"/>
+      <stop offset="100%" stop-color="#d1fae5"/>
+    </linearGradient>
+    <linearGradient id="phoneGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f0fdf4"/>
+    </linearGradient>
+    <linearGradient id="btnGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="22" flood-color="#059669" flood-opacity="0.18"/>
+    </filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <radialGradient id="glowStar" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="720" fill="url(#bgGrad)"/>
+  <circle cx="120" cy="110" r="180" fill="#059669" opacity="0.06"/>
+  <circle cx="800" cy="620" r="240" fill="#34d399" opacity="0.08"/>
+
+  <!-- Decorative stars -->
+  <g opacity="0.5">
+    <path d="M90 300 l6 14 15 2 -11 11 3 15 -13 -7 -13 7 3 -15 -11 -11 15 -2z" fill="#10b981"/>
+    <path d="M820 180 l5 11 12 2 -9 9 2 12 -10 -6 -10 6 2 -12 -9 -9 12 -2z" fill="#059669"/>
+    <path d="M760 90 l4 9 10 2 -7 7 2 10 -9 -5 -9 5 2 -10 -7 -7 10 -2z" fill="#10b981"/>
+    <path d="M150 640 l4 9 10 2 -7 7 2 10 -9 -5 -9 5 2 -10 -7 -7 10 -2z" fill="#059669"/>
+  </g>
+
+  <!-- Map pin markers -->
+  <g filter="url(#soft)">
+    <g transform="translate(150 120)">
+      <path d="M0 0 C24 -14 52 -14 66 0 l-33 78z" fill="#059669"/>
+      <circle cx="33" cy="2" r="16" fill="#34d399"/>
+      <circle cx="33" cy="2" r="7" fill="#ffffff"/>
+    </g>
+    <g transform="translate(620 180)">
+      <path d="M0 0 C24 -14 52 -14 66 0 l-33 78z" fill="#0d9488"/>
+      <circle cx="33" cy="2" r="16" fill="#2dd4bf"/>
+      <circle cx="33" cy="2" r="7" fill="#ffffff"/>
+    </g>
+  </g>
+
+  <!-- Center floating cards (left) : rating -->
+  <g filter="url(#soft)" transform="translate(70 420)">
+    <rect width="190" height="86" rx="16" fill="url(#cardGrad)" stroke="#ffffff" stroke-opacity="0.8"/>
+    <circle cx="26" cy="30" r="13" fill="#059669" opacity="0.15"/>
+    <text x="26" y="35" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#059669">★</text>
+    <text x="48" y="35" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#0f172a">4,8 / 5</text>
+    <text x="26" y="62" font-family="Arial, sans-serif" font-size="11" fill="#64748b">Avis vérifiés de clients</text>
+  </g>
+
+  <!-- Center floating cards (right) : verified -->
+  <g filter="url(#soft)" transform="translate(640 430)">
+    <rect width="195" height="86" rx="16" fill="url(#cardGrad)" stroke="#ffffff" stroke-opacity="0.8"/>
+    <circle cx="26" cy="30" r="13" fill="#059669" opacity="0.15"/>
+    <text x="26" y="35" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#059669">✓</text>
+    <text x="48" y="35" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#0f172a">100% certifiés</text>
+    <text x="26" y="62" font-family="Arial, sans-serif" font-size="11" fill="#64748b">Prestataires &amp; entreprises pro</text>
+  </g>
+
+  <!-- Phone mockup -->
+  <g filter="url(#shadow)" transform="translate(370 150)">
+    <rect x="0" y="0" width="240" height="470" rx="38" fill="url(#phoneGrad)" stroke="#d1d5db" stroke-width="2"/>
+    <rect x="8" y="10" width="224" height="450" rx="30" fill="#ffffff"/>
+    <!-- notch -->
+    <rect x="82" y="18" width="76" height="20" rx="10" fill="#0f172a"/>
+    <!-- app header -->
+    <rect x="8" y="40" width="224" height="58" rx="18" fill="url(#btnGrad)"/>
+    <circle cx="40" cy="63" r="16" fill="#ffffff" opacity="0.9"/>
+    <path d="M33 63 h8 M36 59 l8 4 -8 4z" fill="#059669"/>
+    <text x="66" y="68" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#ffffff">VServiceRDC</text>
+    <circle cx="204" cy="56" r="9" fill="#ffffff" opacity="0.9"/>
+    <path d="M204 53 a4 4 0 1 0 0 6" stroke="#059669" stroke-width="1.6" fill="none"/>
+    <!-- search bar -->
+    <rect x="24" y="112" width="192" height="40" rx="20" fill="#f1f5f9" stroke="#e2e8f0"/>
+    <circle cx="46" cy="132" r="8" stroke="#94a3b8" stroke-width="1.6" fill="none"/>
+    <line x1="51" y1="137" x2="56" y2="142" stroke="#94a3b8" stroke-width="1.6" stroke-linecap="round"/>
+    <text x="62" y="136" font-family="Arial, sans-serif" font-size="12" fill="#94a3b8">Rechercher un service...</text>
+    <!-- quick actions -->
+    <rect x="24" y="168" width="88" height="54" rx="14" fill="#ecfdf5" stroke="#a7f3d0"/>
+    <text x="44" y="192" text-anchor="middle" font-family="Arial, sans-serif" font-size="18">🔧</text>
+    <text x="68" y="210" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#059669">Prestataires</text>
+    <rect x="128" y="168" width="88" height="54" rx="14" fill="#ecfdf5" stroke="#a7f3d0"/>
+    <text x="148" y="192" text-anchor="middle" font-family="Arial, sans-serif" font-size="18">🏢</text>
+    <text x="172" y="210" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#059669">Entreprises</text>
+    <!-- provider card -->
+    <g filter="url(#soft)">
+      <rect x="20" y="240" width="200" height="118" rx="16" fill="#ffffff" stroke="#e2e8f0"/>
+      <circle cx="46" cy="270" r="16" fill="#34d399"/>
+      <text x="46" y="275" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#ffffff">JM</text>
+      <text x="70" y="266" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#0f172a">Jean M.</text>
+      <text x="70" y="282" font-family="Arial, sans-serif" font-size="9" fill="#64748b">Électricien certifié ⭐</text>
+      <rect x="20" y="296" width="200" height="1" fill="#f1f5f9"/>
+      <text x="30" y="316" font-family="Arial, sans-serif" font-size="9" fill="#64748b">📍 Gombe, Kinshasa</text>
+      <text x="30" y="334" font-family="Arial, sans-serif" font-size="9" fill="#059669">✔ Vérifié • Disponible</text>
+      <rect x="142" y="302" width="68" height="26" rx="13" fill="url(#btnGrad)"/>
+      <text x="176" y="319" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#ffffff">Contacter</text>
+    </g>
+    <!-- trusted badge card -->
+    <g filter="url(#soft)">
+      <rect x="20" y="370" width="200" height="52" rx="14" fill="#ecfdf5" stroke="#a7f3d0"/>
+      <circle cx="40" cy="396" r="11" fill="#059669"/>
+      <path d="M35 396 l4 4 7 -7" stroke="#ffffff" stroke-width="2" fill="none"/>
+      <text x="58" y="392" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#065f46">Service de confiance</text>
+      <text x="58" y="407" font-family="Arial, sans-serif" font-size="8.5" fill="#059669">Découvrez les meilleurs pros</text>
+    </g>
+    <!-- bottom nav -->
+    <rect x="8" y="432" width="224" height="28" rx="14" fill="#f8fafc"/>
+    <circle cx="36" cy="446" r="4" fill="#059669"/>
+    <circle cx="86" cy="446" r="4" fill="#cbd5e1"/>
+    <circle cx="136" cy="446" r="4" fill="#cbd5e1"/>
+    <circle cx="186" cy="446" r="4" fill="#cbd5e1"/>
+  </g>
+
+  <!-- Small floating chips -->
+  <g filter="url(#soft)">
+    <g transform="translate(330 120)">
+      <rect width="132" height="40" rx="20" fill="#ffffff" stroke="#a7f3d0"/>
+      <circle cx="20" cy="20" r="7" fill="#34d399"/>
+      <path d="M17 20 l2.2 2.2 4 -4" stroke="#ffffff" stroke-width="1.3" fill="none"/>
+      <text x="34" y="24" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#065f46">Vérifié</text>
+    </g>
+    <g transform="translate(470 618)">
+      <rect width="150" height="40" rx="20" fill="#ffffff" stroke="#a7f3d0"/>
+      <circle cx="20" cy="20" r="7" fill="#f59e0b"/>
+      <text x="19" y="24" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#ffffff">★</text>
+      <text x="34" y="24" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#92400e">Avis clients</text>
+    </g>
+  </g>
+
+  <!-- Connection path between people -->
+  <path d="M120 470 C 200 320, 420 300, 370 150" stroke="#34d399" stroke-width="3" stroke-dasharray="6 8" stroke-linecap="round" fill="none" opacity="0.4"/>
+</svg>

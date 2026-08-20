@@ -154,3 +154,39 @@
     transform: translateY(0);
   }
 }
+
+/* iOS safe areas (notched devices) */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-area-t {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Prevent overscroll / rubber-band body bounce on iOS */
+html,
+body {
+  height: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* Improve touch targets on mobile */
+@media (max-width: 640px) {
+  button,
+  [role="button"],
+  a,
+  select {
+    touch-action: manipulation;
+  }
+}

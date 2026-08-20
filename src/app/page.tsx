@@ -31,7 +31,8 @@ import {
   Plus, Minus, Edit, Trash2, Ban, Check, X, RefreshCw, Loader2,
   Sparkles, ShieldCheck, TrendingUp, FileText, ThumbsUp,
   MoreVertical, Lock, Key, Copy, ExternalLink, Store, Wrench,
-  Smartphone, ChevronDown, IdCard, UserCheck, Filter, Zap, Download, Moon, Sun, Palette, Save, Image, Video, Grid
+  Smartphone, ChevronDown, IdCard, UserCheck, Filter, Zap, Download, Moon, Sun, Palette, Save, Image, Video, Grid,
+  Rocket, Handshake, HeartHandshake
 } from 'lucide-react'
 
 // ============================================================
@@ -578,7 +579,7 @@ export default function VServiceRDC() {
 
   const handleAdminAction = async (userId: string, action: string, reason?: string) => { setAdminLoading(true); try { const b: any = { userId, action }; if (reason) b.reason = reason; const r = await fetch('/api/admin/validate', { method: 'PUT', headers: authHeaders(), body: JSON.stringify(b) }); if (r.ok) { toast({ title: 'Succès' }); fetchAdminData() } else toast({ title: 'Erreur', variant: 'destructive' }) } catch { toast({ title: 'Erreur', variant: 'destructive' }) }; setAdminLoading(false) }
   const handleDeleteUser = async (userId: string) => { if (!confirm('Supprimer cet utilisateur ?')) return; setAdminLoading(true); try { const r = await fetch('/api/admin/users', { method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ userId }) }); if (r.ok) { toast({ title: 'Succès' }); fetchAdminData() } } catch { /* */ }; setAdminLoading(false) }
-  const handleSendAnnouncement = async () => { if (!annTitle || !annMessage) return; setAnnLoading(true); try { const b: any = { title: annTitle, message: annMessage + '\n\n---\n**Équipe VServicesRDC**', targetType: annTargetType }; const r = await fetch('/api/admin/announcements', { method: 'POST', headers: authHeaders(), body: JSON.stringify(b) }); if (r.ok) { toast({ title: 'Annonce envoyée' }); setAnnTitle(''); setAnnMessage(''); fetchAdminData() } } catch { /* */ }; setAnnLoading(false) }
+  const handleSendAnnouncement = async () => { if (!annTitle || !annMessage) return; setAnnLoading(true); try { const b: any = { title: annTitle, message: annMessage + '\n\n---\n**Équipe HenoBuild Entreprise × KinMusala**', targetType: annTargetType }; const r = await fetch('/api/admin/announcements', { method: 'POST', headers: authHeaders(), body: JSON.stringify(b) }); if (r.ok) { toast({ title: 'Annonce envoyée' }); setAnnTitle(''); setAnnMessage(''); fetchAdminData() } } catch { /* */ }; setAnnLoading(false) }
   const handleReplyMessage = async () => { if (!replyMsgId || !replyText) return; setReplyLoading(true); try { const r = await fetch('/api/admin/messages', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ messageId: replyMsgId, reply: replyText }) }); if (r.ok) { toast({ title: 'Réponse envoyée' }); setReplyTexts(p => { const n = { ...p }; delete n[replyMsgId]; return n }); setReplyMsgId(''); setReplyText(''); fetchAdminData() } } catch { /* */ }; setReplyLoading(false) }
   const handleRejectDeletion = async (userId: string) => { try { const r = await fetch('/api/admin/users', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ userId, action: 'reject-deletion' }) }); if (r.ok) { toast({ title: 'Demande refusée' }); fetchAdminData() } else toast({ title: 'Erreur', variant: 'destructive' }) } catch { /* */ } }
   const handleReviewAction = async (reviewId: string, action: string) => { try { const r = await fetch('/api/admin/reviews', { method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ reviewId, action }) }); if (r.ok) { const rr = await fetch('/api/admin/reviews', { headers: authHeaders() }); if (rr.ok) setAdminReviews((await rr.json()).reviews || []); toast({ title: 'Action effectuée' }) } } catch { /* */ } }
@@ -804,50 +805,239 @@ export default function VServiceRDC() {
   const renderLanding = () => (
     <div className={`min-h-screen bg-gradient-to-b ${th.gradientFrom} ${th.gradientTo}`}>
       <SettingsFloater />
+      {/* Partnership announcement banner */}
+      <div className="bg-emerald-600 text-white px-4 py-2.5 overflow-hidden">
+        <div className="max-w-6xl mx-auto flex items-center justify-center gap-2 text-center text-xs sm:text-sm font-medium">
+          <Sparkles className="h-4 w-4 shrink-0 text-yellow-300" />
+          <span className="truncate">{t('partnershipShort')} : <span className="font-bold text-yellow-200">{t('partnershipBrands')}</span></span>
+          <span className="hidden sm:inline-flex items-center gap-1 ml-1 px-2 py-0.5 rounded-full bg-white/15 text-white text-[10px] font-semibold uppercase tracking-wide"><CheckCircle className="h-3 w-3" />{t('partnershipBadge')}</span>
+        </div>
+      </div>
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-emerald-100">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2"><img src="/logo.png" alt="VServiceRDC" className="h-9 w-auto" /><span className={`font-bold text-lg ${th.accent}`}>VServiceRDC</span></div>
-          <div className="flex gap-2">
+          <nav className="hidden md:flex items-center gap-6 text-sm">
+            <a href="#features" className={`${th.textSecondary} hover:${th.accent} transition-colors`}>{t('verifiedProviders')}</a>
+            <a href="#how" className={`${th.textSecondary} hover:${th.accent} transition-colors`}>{t('howTitle')}</a>
+            <a href="#partnership" className={`${th.textSecondary} hover:${th.accent} transition-colors`}>{t('partnershipBadge')}</a>
+            <a href="#mobile" className={`${th.textSecondary} hover:${th.accent} transition-colors`}>{t('downloadMobile')}</a>
+          </nav>
+          <div className="flex items-center gap-2">
             <Select value={lang} onValueChange={(v) => setLang(v as Language)}>
-              <SelectTrigger className="w-auto h-8 text-xs border-gray-200"><Globe className="h-3 w-3 mr-1" /><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-auto h-8 text-xs border-gray-200 bg-white"><Globe className="h-3 w-3 mr-1" /><SelectValue /></SelectTrigger>
               <SelectContent>{Object.entries(languageNames).map(([c, n]) => <SelectItem key={c} value={c}>{n}</SelectItem>)}</SelectContent>
             </Select>
-            <Button variant="ghost" className={`${th.accent} text-sm`} onClick={() => navigate('login')}>{t('login')}</Button>
-            <Button className={`${th.primary} ${th.primaryText}`} onClick={() => navigate('register')}>{t('register')}</Button>
+            <Button variant="ghost" className={`${th.accent} text-sm hidden sm:inline-flex`} onClick={() => navigate('login')}>{t('login')}</Button>
+            <Button className={`${th.primary} ${th.primaryText} text-sm`} onClick={() => navigate('register')}>{t('register')}</Button>
           </div>
         </div>
       </header>
-      <section className="max-w-6xl mx-auto px-4 py-16 md:py-24 text-center">
-        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${th.badgeBg} ${th.badgeText} text-sm font-medium mb-6`}><Sparkles className="h-4 w-4" /> {t('appSlogan')}</div>
-        <h1 className={`text-4xl md:text-6xl font-bold ${th.textPrimary} leading-tight mb-6`}>{t('appDescription').split('.')[0]} <span className={th.accent}>.</span></h1>
-        <p className={`text-lg md:text-xl ${th.textSecondary} max-w-2xl mx-auto mb-10`}>{t('appDescription')}</p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Button size="lg" className={`${th.primary} ${th.primaryText} text-lg px-8 py-6 rounded-xl`} onClick={() => navigate('register')}>{t('register')} <ArrowRight className="h-5 w-5 ml-2" /></Button>
-          <Button size="lg" variant="outline" className={`${th.accentBorder} ${th.accent} hover:${th.accentLight} text-lg px-8 py-6 rounded-xl`} onClick={() => navigate('login')}>{t('login')}</Button>
+
+      {/* HERO */}
+      <section className="max-w-6xl mx-auto px-4 py-10 md:py-16 grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+        <div className="text-center lg:text-left">
+          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${th.badgeBg} ${th.badgeText} text-sm font-medium mb-6`}><Sparkles className="h-4 w-4" /> {t('heroBadge')}</div>
+          <h1 className={`text-3xl sm:text-4xl md:text-5xl font-bold ${th.textPrimary} leading-tight mb-6`}>{t('heroTitle')} <span className={th.accent}>.</span></h1>
+          <p className={`text-base md:text-lg ${th.textSecondary} max-w-xl mx-auto lg:mx-0 mb-8`}>{t('heroSubtitle')}</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+            <Button size="lg" className={`${th.primary} ${th.primaryText} text-lg px-8 py-6 rounded-xl shadow-lg shadow-emerald-200`} onClick={() => navigate('register')}>{t('heroCtaPrimary')} <ArrowRight className="h-5 w-5 ml-2" /></Button>
+            <Button size="lg" variant="outline" className={`${th.accentBorder} ${th.accent} text-lg px-8 py-6 rounded-xl bg-white/70 backdrop-blur-sm`} onClick={() => navigate('login')}>{t('login')}</Button>
+          </div>
+          <div className="mt-8">
+            <Button variant="outline" className={`gap-2 ${th.accentBorder} ${th.accent} bg-white/70 backdrop-blur-sm`} onClick={() => { if (typeof window !== 'undefined' && (window as any).deferredPWAInstall) { (window as any).deferredPWAInstall.prompt(); return } toast({ title: t('downloadMobile'), description: t('installInstructions'), duration: 8000 }) }}>
+              <Smartphone className="h-5 w-5" />{t('downloadMobile')}<Download className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="mt-8 flex flex-wrap items-center justify-center lg:justify-start gap-3">
+            {[{ icon: <ShieldCheck className="h-4 w-4" />, label: t('verifiedProviders') }, { icon: <Star className="h-4 w-4 fill-amber-400 text-amber-400" />, label: t('ratings') }, { icon: <MapPin className="h-4 w-4" />, label: t('localSearch') }].map((b, i) => (
+              <span key={i} className={`inline-flex items-center gap-1.5 text-xs font-medium ${th.alertBg} ${th.accent} px-3 py-1.5 rounded-full ${th.accentBorder}`}>{b.icon}{b.label}</span>
+            ))}
+          </div>
         </div>
-        <div className="mt-8">
-          <Button variant="outline" className={`gap-2 ${th.accentBorder} ${th.accent}`} onClick={() => { if (typeof window !== 'undefined' && (window as any).deferredPWAInstall) { (window as any).deferredPWAInstall.prompt(); return } toast({ title: t('downloadMobile'), description: t('installInstructions'), duration: 8000 }) }}>
-            <Smartphone className="h-5 w-5" />{t('downloadMobile')}<Download className="h-4 w-4" />
-          </Button>
+        <div className="relative">
+          <img src="/hero-vservice.svg" alt="VServiceRDC - Prestataires et entreprises de confiance en RDC" className="w-full h-auto max-w-lg mx-auto drop-shadow-2xl" width={900} height={720} />
         </div>
       </section>
-      <section className="max-w-6xl mx-auto px-4 py-16">
-        <h2 className={`text-2xl md:text-3xl font-bold text-center ${th.textPrimary} mb-12`}>{t('verifiedProviders')} / {t('localSearch')} / {t('ratings')}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+      {/* STATS */}
+      <section className="max-w-6xl mx-auto px-4 py-10">
+        <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 rounded-3xl ${th.accentLight} ${th.accentBorder} p-6 md:p-8 border`}>
           {[
-            { icon: <ShieldCheck className="h-8 w-8" />, title: t('verifiedProviders'), desc: t('verifiedProvidersDesc') },
-            { icon: <MapPin className="h-8 w-8" />, title: t('localSearch'), desc: t('localSearchDesc') },
-            { icon: <Star className="h-8 w-8" />, title: t('ratings'), desc: t('ratingsDesc') },
-          ].map((f, i) => (
-            <Card key={i} className={`${th.accentBorder} hover:shadow-lg transition-shadow`}><CardContent className="pt-6 text-center"><div className={`inline-flex items-center justify-center w-16 h-16 rounded-full ${th.accentLight} ${th.accent} mb-4`}>{f.icon}</div><h3 className={`font-semibold text-lg ${th.textPrimary} mb-2`}>{f.title}</h3><p className={th.textSecondary}>{f.desc}</p></CardContent></Card>
+            { icon: <Users className="h-6 w-6" />, value: '+10 000', label: t('statsProviders') },
+            { icon: <Building2 className="h-6 w-6" />, value: '+2 000', label: t('statsEntreprises') },
+            { icon: <Heart className="h-6 w-6" />, value: '+50 000', label: t('statsClients') },
+            { icon: <Globe className="h-6 w-6" />, value: '26', label: t('statsRegions') },
+          ].map((s, i) => (
+            <div key={i} className="text-center">
+              <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full ${th.badgeBg} ${th.badgeText} mb-2 mx-auto`}>{s.icon}</div>
+              <p className={`text-2xl md:text-3xl font-bold ${th.textPrimary}`}>{s.value}</p>
+              <p className={`text-xs md:text-sm ${th.textSecondary}`}>{s.label}</p>
+            </div>
           ))}
         </div>
       </section>
-      <footer className={`border-t ${th.accentBorder} mt-16`}>
-        <div className="max-w-6xl mx-auto px-4 py-8 text-center">
-          <div className="flex items-center justify-center gap-2 mb-4"><img src="/logo.png" alt="VServiceRDC" className="h-7 w-auto" /><span className={`font-semibold ${th.accent}`}>VServiceRDC</span></div>
-          <p className={`text-sm ${th.textSecondary}`}>La plateforme de référence pour les services en RDC</p>
-          <p className="text-sm text-gray-400 mt-2">{t('createdBy')} <span className={`font-semibold ${th.accent}`}>HenoBuild</span></p>
+
+      {/* FEATURES */}
+      <section id="features" className="max-w-6xl mx-auto px-4 py-12 scroll-mt-20">
+        <h2 className={`text-2xl md:text-3xl font-bold text-center ${th.textPrimary} mb-3`}>{t('verifiedProviders')} · {t('localSearch')} · {t('ratings')}</h2>
+        <p className={`text-center ${th.textSecondary} mb-12 max-w-2xl mx-auto`}>{t('verifiedDesc')}</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            { icon: <ShieldCheck className="h-8 w-8" />, title: t('verifiedTitle'), desc: t('verifiedDesc') },
+            { icon: <MapPin className="h-8 w-8" />, title: t('localSearch'), desc: t('localSearchDesc') },
+            { icon: <Star className="h-8 w-8" />, title: t('ratings'), desc: t('ratingsDesc') },
+            { icon: <Lock className="h-8 w-8" />, title: t('securityTitle'), desc: t('securityDesc') },
+            { icon: <MessageSquare className="h-8 w-8" />, title: t('chat'), desc: t('supportDesc') },
+            { icon: <TrendingUp className="h-8 w-8" />, title: t('entreprise'), desc: t('entrepriseDesc') },
+          ].map((f, i) => (
+            <Card key={i} className={`${th.accentBorder} hover:shadow-lg transition-shadow hover:-translate-y-1 duration-300`}><CardContent className="pt-6 text-center"><div className={`inline-flex items-center justify-center w-16 h-16 rounded-full ${th.accentLight} ${th.accent} mb-4`}>{f.icon}</div><h3 className={`font-semibold text-lg ${th.textPrimary} mb-2`}>{f.title}</h3><p className={`${th.textSecondary} text-sm`}>{f.desc}</p></CardContent></Card>
+          ))}
+        </div>
+      </section>
+
+      {/* HOW IT WORKS */}
+      <section id="how" className={`${th.accentLight} border-y ${th.accentBorder}`}>
+        <div className="max-w-6xl mx-auto px-4 py-14">
+          <h2 className={`text-2xl md:text-3xl font-bold text-center ${th.textPrimary} mb-3`}>{t('howTitle')}</h2>
+          <p className={`text-center ${th.textSecondary} mb-12`}>{t('howSubtitle')}</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              { step: '1', icon: <Search className="h-8 w-8" />, title: t('how1Title'), desc: t('how1Desc') },
+              { step: '2', icon: <MessageSquare className="h-8 w-8" />, title: t('how2Title'), desc: t('how2Desc') },
+              { step: '3', icon: <CheckCircle className="h-8 w-8" />, title: t('how3Title'), desc: t('how3Desc') },
+            ].map((s, i) => (
+              <div key={i} className="relative text-center">
+                <div className={`inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-white shadow-md ${th.accent} mb-4`}>{s.icon}</div>
+                <span className={`absolute top-0 right-1/2 translate-x-14 md:translate-x-20 inline-flex items-center justify-center w-7 h-7 rounded-full ${th.primary} ${th.primaryText} text-xs font-bold`}>{s.step}</span>
+                <h3 className={`font-semibold text-lg ${th.textPrimary} mb-2`}>{s.title}</h3>
+                <p className={`${th.textSecondary} text-sm max-w-xs mx-auto`}>{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PARTNERSHIP */}
+      <section id="partnership" className="max-w-6xl mx-auto px-4 py-14 scroll-mt-20">
+        <div className={`rounded-3xl overflow-hidden bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white shadow-2xl shadow-emerald-200 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center`}>
+          <div className="p-8 md:p-12">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 text-yellow-200 text-xs font-semibold uppercase tracking-wide mb-6"><Sparkles className="h-4 w-4" />{t('partnershipBadge')}</div>
+            <h2 className="text-2xl md:text-3xl font-bold mb-4">{t('partnershipTitle')}</h2>
+            <p className="text-white/90 mb-4">{t('partnershipShort')} <strong className="text-yellow-200">{t('partnershipBrands')}</strong>.</p>
+            <p className="text-white/85 text-sm md:text-base mb-8">{t('partnershipDesc')}</p>
+            <div className="grid grid-cols-2 gap-3 mb-8">
+              {[ShieldCheck, Rocket, Handshake, HeartHandshake].map((Icon, i) => (
+                <div key={i} className="flex items-center gap-2 bg-white/10 rounded-xl px-3 py-2.5 backdrop-blur-sm text-sm font-medium"><Icon className="h-4 w-4 text-yellow-300 shrink-0" />{t('pv' + (i + 1))}</div>
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex -space-x-3">
+                <div className="w-11 h-11 rounded-full bg-white/20 border-2 border-white/60 flex items-center justify-center font-bold text-sm">H</div>
+                <div className="w-11 h-11 rounded-full bg-white/20 border-2 border-white/60 flex items-center justify-center font-bold text-sm">K</div>
+              </div>
+              <div>
+                <p className="font-semibold text-sm">{t('partnershipBrands')}</p>
+                <p className="text-white/70 text-xs">{t('partnershipBadge')} ✓</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-8 md:p-12 hidden lg:flex flex-col gap-4">
+            <Card className="bg-white/95 text-gray-900 shadow-xl"><CardContent className="p-6"><div className="flex items-center gap-3 mb-3"><div className={`w-11 h-11 rounded-full flex items-center justify-center ${th.accentLight} ${th.accent}`}><Building2 className="h-6 w-6" /></div><div><p className="font-bold text-sm">HenoBuild Entreprise</p><p className="text-xs text-gray-500">BTP · Technologie · Innovation</p></div></div><p className="text-sm text-gray-600">Expertise technique, innovation et mise en œuvre des solutions digitales au service de la RDC.</p></CardContent></Card>
+            <Card className="bg-white/95 text-gray-900 shadow-xl"><CardContent className="p-6"><div className="flex items-center gap-3 mb-3"><div className={`w-11 h-11 rounded-full flex items-center justify-center ${th.accentLight} ${th.accent}`}><Store className="h-6 w-6" /></div><div><p className="font-bold text-sm">KinMusala</p><p className="text-xs text-gray-500">Services · Commerce · Écosystème local</p></div></div><p className="text-sm text-gray-600">Réseau d'envergure, ancrage local profond et dynamisme du marché congolais.</p></CardContent></Card>
+            <div className="flex items-center gap-2 text-sm font-medium justify-center"><Rocket className="h-4 w-4 text-yellow-300" /> {t('madeWith')}</div>
+          </div>
+        </div>
+      </section>
+
+      {/* MOBILE APP */}
+      <section id="mobile" className={`${th.accentLight} border-y ${th.accentBorder} scroll-mt-20`}>
+        <div className="max-w-6xl mx-auto px-4 py-14 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          <div className="hidden md:flex justify-center">
+            <div className="relative">
+              <div className="w-44 h-88 rounded-[2.5rem] bg-gray-900 p-2 shadow-2xl rotate-6">
+                <div className="w-full h-full rounded-[2rem] bg-white overflow-hidden">
+                  <div className={`h-64 ${th.primary} p-3`}>
+                    <img src="/logo.png" alt="VServiceRDC" className="h-8 w-auto bg-white rounded-lg p-1" />
+                    <p className="text-white text-xs font-semibold mt-2">VServiceRDC</p>
+                  </div>
+                  <div className="p-3 space-y-2">
+                    <div className="h-2.5 bg-gray-100 rounded-full" />
+                    <div className="h-2.5 bg-gray-100 rounded-full w-3/4" />
+                    <div className={`h-12 rounded-xl ${th.accentLight} border ${th.accentBorder} mt-3 flex items-center px-3 text-xs ${th.accent} font-medium`}><Wrench className="h-4 w-4 mr-2" />Prestataires certifiés</div>
+                    <div className={`h-12 rounded-xl ${th.accentLight} border ${th.accentBorder} flex items-center px-3 text-xs ${th.accent} font-medium`}><Building2 className="h-4 w-4 mr-2" />Entreprises vérifiées</div>
+                  </div>
+                </div>
+              </div>
+              <div className="absolute -bottom-4 -left-4 bg-white rounded-2xl shadow-xl px-4 py-3 flex items-center gap-2 rotate-[-6deg]"><Star className="h-5 w-5 fill-amber-400 text-amber-400" /><span className="text-xs font-bold text-gray-800">4,8/5</span></div>
+            </div>
+          </div>
+          <div className="text-center md:text-left">
+            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${th.badgeBg} ${th.badgeText} text-sm font-medium mb-6`}><Smartphone className="h-4 w-4" />PWA</div>
+            <h2 className={`text-2xl md:text-3xl font-bold ${th.textPrimary} mb-4`}>{t('mobileTitle')}</h2>
+            <p className={`${th.textSecondary} mb-8 max-w-xl mx-auto md:mx-0`}>{t('mobileDesc')}</p>
+            <Button size="lg" variant="outline" className={`gap-2 ${th.accentBorder} ${th.accent} bg-white px-8 py-6 rounded-xl`} onClick={() => { if (typeof window !== 'undefined' && (window as any).deferredPWAInstall) { (window as any).deferredPWAInstall.prompt(); return } toast({ title: t('downloadMobile'), description: t('installInstructions'), duration: 8000 }) }}>
+              <Download className="h-5 w-5" />{t('downloadMobile')}
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="max-w-6xl mx-auto px-4 py-14 text-center">
+        <h2 className={`text-2xl md:text-3xl font-bold ${th.textPrimary} mb-4`}>{t('appSlogan')}</h2>
+        <p className={`${th.textSecondary} mb-8 max-w-2xl mx-auto`}>{t('appDescription')}</p>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Button size="lg" className={`${th.primary} ${th.primaryText} text-lg px-8 py-6 rounded-xl shadow-lg shadow-emerald-200`} onClick={() => navigate('register')}>{t('register')}<ArrowRight className="h-5 w-5 ml-2" /></Button>
+          <Button size="lg" variant="outline" className={`${th.accentBorder} ${th.accent} text-lg px-8 py-6 rounded-xl bg-white/70 backdrop-blur-sm`} onClick={() => navigate('login')}>{t('login')}</Button>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className={`border-t ${th.accentBorder} bg-white/60 backdrop-blur-sm`}>
+        <div className="max-w-6xl mx-auto px-4 py-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div>
+            <div className="flex items-center gap-2 mb-4"><img src="/logo.png" alt="VServiceRDC" className="h-8 w-auto" /><span className={`font-bold ${th.accent}`}>VServiceRDC</span></div>
+            <p className={`text-sm ${th.textSecondary} mb-4`}>{t('footerTagline')}</p>
+            <div className="flex items-center gap-2">{[{ icon: <Handshake className="h-4 w-4" /> }, { icon: <Heart className="h-4 w-4" /> }, { icon: <Star className="h-4 w-4" /> }].map((i, idx) => <span key={idx} className={`inline-flex items-center justify-center w-9 h-9 rounded-full ${th.accentLight} ${th.accent}`}>{i.icon}</span>)}</div>
+          </div>
+          <div>
+            <h4 className={`font-semibold text-sm ${th.textPrimary} mb-4`}>{t('partnershipBadge')}</h4>
+            <ul className={`space-y-2 text-sm ${th.textSecondary}`}>
+              <li>HenoBuild Entreprise</li>
+              <li>KinMusala</li>
+              <li className="font-medium text-emerald-600">{t('partnershipBadge')}</li>
+              <li>{t('madeWith')}</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className={`font-semibold text-sm ${th.textPrimary} mb-4`}>Navigation</h4>
+            <ul className={`space-y-2 text-sm ${th.textSecondary}`}>
+              <li><a href="#features" className="hover:text-emerald-600 transition-colors">{t('verifiedProviders')}</a></li>
+              <li><a href="#how" className="hover:text-emerald-600 transition-colors">{t('howTitle')}</a></li>
+              <li><a href="#partnership" className="hover:text-emerald-600 transition-colors">{t('partnershipBadge')}</a></li>
+              <li><a href="#mobile" className="hover:text-emerald-600 transition-colors">{t('downloadMobile')}</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className={`font-semibold text-sm ${th.textPrimary} mb-4`}>{t('contactUs')}</h4>
+            <ul className={`space-y-2 text-sm ${th.textSecondary}`}>
+              <li className="flex items-center gap-2"><Phone className="h-4 w-4" />+243 000 000 000</li>
+              <li className="flex items-center gap-2"><Mail className="h-4 w-4" />contact@vservicerdc.com</li>
+              <li className="flex items-center gap-2"><MapPin className="h-4 w-4" />Kinshasa, RDC</li>
+              <li className="flex items-center gap-2"><Globe className="h-4 w-4" />vservicerdc.com</li>
+            </ul>
+          </div>
+        </div>
+        <div className={`border-t ${th.accentBorder}`}>
+          <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col items-center justify-center gap-3 text-center">
+            <div className="flex items-center gap-2 flex-wrap justify-center">
+              <span className="text-sm text-gray-400">{t('createdBy')}</span>
+              <span className={`font-bold ${th.accent}`}>HenoBuild Entreprise</span>
+              <span className="text-gray-400 text-sm">X</span>
+              <span className={`font-bold ${th.accent}`}>KinMusala</span>
+            </div>
+            <p className="text-xs text-gray-400">{t('footerPartnership')} · © {new Date().getFullYear()} VServiceRDC · {t('rights')}</p>
+          </div>
         </div>
       </footer>
     </div>

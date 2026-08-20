@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       data: {
         authorId: session.userId,
         title,
-        message: message + '\n\nL\'Équipe HenoBuild',
+message: message + '\n\nL\'Équipe HenoBuild Entreprise × KinMusala',
         targetType,
         targetId: targetId || null,
       },

@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
         data: {
           userId: message.userId,
           title: 'Réponse à votre message',
-          message: reply + '\n\nL\'Équipe HenoBuild',
+          message: reply + '\n\nL\'Équipe HenoBuild Entreprise × KinMusala',
           type: 'info',
         },
       });
