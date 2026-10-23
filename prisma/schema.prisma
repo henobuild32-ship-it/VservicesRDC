@@ -14,9 +14,14 @@ model User {
   email              String?
   role               String   @default("CLIENT") // CLIENT, PRESTATAIRE, ENTREPRISE, ADMIN
   status             String   @default("approved") // pending, approved, rejected, suspended
-  autoReplyMessage   String? 
-  deletionReason     String? 
+  autoReplyMessage   String?
+  deletionReason     String?
   deletionRequestedAt DateTime?
+  emailOtpHash       String?
+  emailOtpPurpose    String? // "login" | "reset"
+  emailOtpExpiresAt  DateTime?
+  emailOtpAttempts   Int      @default(0)
+  emailOtpSentAt     DateTime?
   certified          Boolean  @default(false)
   certificationStatus String? // "pending" | "rejected" | null (null = none/approved)
   certificationMessage String?

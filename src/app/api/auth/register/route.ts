@@ -67,6 +67,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Ce numéro de téléphone est déjà utilisé' }, { status: 400 });
     }
 
+    if (email) {
+      const existingEmail = await db.user.findFirst({
+        where: { email: { equals: email.trim(), mode: 'insensitive' } },
+      });
+      if (existingEmail) {
+        return NextResponse.json({ error: 'Un compte existe déjà avec cet email' }, { status: 400 });
+      }
+    }
+
     const hashedPassword = await hashPassword(password);
     const status = 'pending'; // Admin must validate
 
@@ -74,7 +83,7 @@ export async function POST(req: NextRequest) {
       data: {
         phone,
         password: hashedPassword,
-        email: email || null,
+        email: email ? email.trim() : null,
         role,
         status,
       },

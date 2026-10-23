@@ -27,6 +27,7 @@ export default function PublicProviderPage() {
 
   useEffect(() => {
     if (!slug) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset du loader au changement de slug
     setLoading(true)
     fetch('/api/public/' + slug).then(r => r.json()).then(d => {
       setData(d)

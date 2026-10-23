@@ -369,6 +369,81 @@ export default function VServiceRDC() {
   const [loginPhone, setLoginPhone] = useState(''); const [loginPassword, setLoginPassword] = useState('')
   const [loginIsAdmin, setLoginIsAdmin] = useState(false); const [loginAdminPass, setLoginAdminPass] = useState('')
   const [showLoginPass, setShowLoginPass] = useState(false); const [loginLoading, setLoginLoading] = useState(false)
+  // Email login (OTP 6 chiffres)
+  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone')
+  const [loginEmail, setLoginEmail] = useState(''); const [loginOtp, setLoginOtp] = useState('')
+  const [otpSent, setOtpSent] = useState(false); const [otpLoading, setOtpLoading] = useState(false)
+  const [otpResendIn, setOtpResendIn] = useState(0)
+  // Mot de passe oublié
+  const [showForgot, setShowForgot] = useState(false); const [forgotStep, setForgotStep] = useState(0)
+  const [forgotEmail, setForgotEmail] = useState(''); const [forgotOtp, setForgotOtp] = useState(''); const [forgotPass, setForgotPass] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false); const [forgotResendIn, setForgotResendIn] = useState(0)
+
+  useEffect(() => {
+    if (otpResendIn <= 0) return
+    const id = setTimeout(() => setOtpResendIn(v => v - 1), 1000)
+    return () => clearTimeout(id)
+  }, [otpResendIn])
+  useEffect(() => {
+    if (forgotResendIn <= 0) return
+    const id = setTimeout(() => setForgotResendIn(v => v - 1), 1000)
+    return () => clearTimeout(id)
+  }, [forgotResendIn])
+
+  const applyAuthSuccess = (d: any) => {
+    localStorage.setItem('vservicerdc_token', d.token); setToken(d.token)
+    const role = (d.user.role || 'CLIENT') as AccountType
+    setUser({ id: d.user.id, phone: d.user.phone, email: d.user.email, role, status: d.user.status })
+    if (role === 'ADMIN') navigate('admin-dashboard'); else if (role === 'CLIENT') navigate('client-dashboard'); else if (role === 'PRESTATAIRE') navigate('prestataire-dashboard'); else if (role === 'ENTREPRISE') navigate('entreprise-dashboard')
+    toast({ title: t('loginSuccess'), description: t('welcome') })
+  }
+
+  const sendOtp = async (purpose: 'login' | 'reset') => {
+    const email = (purpose === 'login' ? loginEmail : forgotEmail).trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { toast({ title: 'Erreur', description: 'Adresse email invalide.', variant: 'destructive' }); return }
+    if (purpose === 'reset' ? forgotResendIn > 0 : otpResendIn > 0) return
+    if (purpose === 'login') setOtpLoading(true); else setForgotLoading(true)
+    try {
+      const r = await fetch('/api/auth/otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, purpose }) })
+      const d = await r.json()
+      if (r.ok) {
+        if (purpose === 'login') { setOtpSent(true); setOtpResendIn(60); setLoginOtp('') }
+        else { setForgotStep(1); setForgotResendIn(60); setForgotOtp(''); setForgotPass('') }
+        toast({ title: 'Code envoyé ✉️', description: `Code à 6 chiffres envoyé à ${d.sentTo || email}. Valable 10 minutes.` })
+      } else toast({ title: 'Erreur', description: d.error || 'Impossible d\'envoyer le code.', variant: 'destructive' })
+    } catch { toast({ title: 'Erreur', description: 'Erreur serveur.', variant: 'destructive' }) }
+    if (purpose === 'login') setOtpLoading(false); else setForgotLoading(false)
+  }
+
+  const handleLoginEmail = async () => {
+    if (!loginEmail.trim() || !otpSent) { toast({ title: 'Erreur', description: 'Demandez d\'abord votre code par email.', variant: 'destructive' }); return }
+    if (!/^\d{6}$/.test(loginOtp.trim())) { toast({ title: 'Erreur', description: 'Entrez le code à 6 chiffres reçu par email.', variant: 'destructive' }); return }
+    setLoginLoading(true)
+    try {
+      const r = await fetch('/api/auth/login/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: loginEmail.trim(), code: loginOtp.trim() }) })
+      const d = await r.json()
+      if (r.ok) applyAuthSuccess(d)
+      else toast({ title: 'Erreur', description: d.error || 'Code incorrect.', variant: 'destructive' })
+    } catch { toast({ title: 'Erreur', description: 'Erreur serveur.', variant: 'destructive' }) }
+    setLoginLoading(false)
+  }
+
+  const handleResetPassword = async () => {
+    if (!/^\d{6}$/.test(forgotOtp.trim())) { toast({ title: 'Erreur', description: 'Entrez le code à 6 chiffres reçu par email.', variant: 'destructive' }); return }
+    if (forgotPass.length < 6) { toast({ title: 'Erreur', description: 'Le nouveau mot de passe doit contenir au moins 6 caractères.', variant: 'destructive' }); return }
+    setForgotLoading(true)
+    try {
+      const r = await fetch('/api/auth/password/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: forgotEmail.trim(), code: forgotOtp.trim(), newPassword: forgotPass }) })
+      const d = await r.json()
+      if (r.ok) {
+        setShowForgot(false); setForgotStep(0); setForgotOtp(''); setForgotPass('')
+        toast({ title: 'Mot de passe réinitialisé', description: 'Vous êtes connecté(e) avec votre nouveau mot de passe.' })
+        applyAuthSuccess(d)
+      } else toast({ title: 'Erreur', description: d.error || 'Code incorrect.', variant: 'destructive' })
+    } catch { toast({ title: 'Erreur', description: 'Erreur serveur.', variant: 'destructive' }) }
+    setForgotLoading(false)
+  }
+
 
   const handleLogin = async () => {
     if (loginIsAdmin) {
@@ -387,13 +462,8 @@ export default function VServiceRDC() {
     try {
       const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: formatPhone(loginPhone), password: loginPassword }) })
       const d = await r.json()
-      if (r.ok) {
-        localStorage.setItem('vservicerdc_token', d.token); setToken(d.token)
-        const role = (d.user.role || 'CLIENT') as AccountType
-        setUser({ id: d.user.id, phone: d.user.phone, email: d.user.email, role, status: d.user.status })
-        if (role === 'ADMIN') navigate('admin-dashboard'); else if (role === 'CLIENT') navigate('client-dashboard'); else if (role === 'PRESTATAIRE') navigate('prestataire-dashboard'); else if (role === 'ENTREPRISE') navigate('entreprise-dashboard')
-        toast({ title: t('loginSuccess'), description: t('welcome') })
-      } else toast({ title: 'Erreur', description: d.message || d.error || 'Identifiants incorrects.', variant: 'destructive' })
+      if (r.ok) applyAuthSuccess(d)
+      else toast({ title: 'Erreur', description: d.message || d.error || 'Identifiants incorrects.', variant: 'destructive' })
     } catch { toast({ title: 'Erreur', description: 'Erreur serveur.', variant: 'destructive' }) }
     setLoginLoading(false)
   }
@@ -567,6 +637,8 @@ export default function VServiceRDC() {
   const [certDialogAction, setCertDialogAction] = useState<'approve' | 'reject' | 'pending'>('approve')
   const [certLoading, setCertLoading] = useState(false)
 
+  const fetchAdminRealisations = async () => { if (!token) return; try { const r = await fetch('/api/admin/realisations', { headers: authHeaders() }); if (r.ok) { const d = await r.json(); setAdminRealisations(d.realisations || []) } else { // fallback: fetch all via realisations API
+    try { const r2 = await fetch('/api/realisations', { headers: authHeaders() }); if (r2.ok) { const d2 = await r2.json(); setAdminRealisations(d2.realisations || []) } } catch { /* */ } } } catch { /* */ } }
   const fetchAdminData = async () => {
     if (!token) return
     try {
@@ -712,8 +784,6 @@ export default function VServiceRDC() {
   const fetchEmployees = async () => { if (!token || user?.role !== 'ENTREPRISE') return; try { const r = await fetch('/api/employees', { headers: authHeaders() }); if (r.ok) { const d = await r.json(); setEmployees(d.employees || []) } } catch { /* */ } }
   // Realisations
   const fetchRealisations = async () => { if (!token || !user || user.role === 'CLIENT' || user.role === 'ADMIN') return; try { const r = await fetch('/api/realisations', { headers: authHeaders() }); if (r.ok) { const d = await r.json(); setRealisations(d.realisations || []) } } catch { /* */ } }
-  const fetchAdminRealisations = async () => { if (!token) return; try { const r = await fetch('/api/admin/realisations', { headers: authHeaders() }); if (r.ok) { const d = await r.json(); setAdminRealisations(d.realisations || []) } else { // fallback: fetch all via realisations API
-    try { const r2 = await fetch('/api/realisations', { headers: authHeaders() }); if (r2.ok) { const d2 = await r2.json(); setAdminRealisations(d2.realisations || []) } } catch { /* */ } } } catch { /* */ } }
   // Provider dashboard
   const [providerDashReviews, setProviderDashReviews] = useState<Review[]>([]); const [providerDashAvg, setProviderDashAvg] = useState(0); const [providerDashCount, setProviderDashCount] = useState(0)
   useEffect(() => {
@@ -1099,12 +1169,53 @@ export default function VServiceRDC() {
             <div className="space-y-2"><Label>{t('adminPassword')}</Label><div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input type={showLoginPass ? 'text' : 'password'} placeholder="••••••••" value={loginAdminPass} onChange={e => setLoginAdminPass(e.target.value)} className="pl-10 pr-10" onKeyDown={e => e.key === 'Enter' && handleLogin()} /><button onClick={() => setShowLoginPass(!showLoginPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">{showLoginPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
             <Button className={`w-full ${th.primary} ${th.primaryText}`} onClick={handleLogin} disabled={loginLoading}>{loginLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}{t('accessAdmin')}</Button>
           </div>) : (<>
-            <div className="space-y-2"><Label>{t('phone')}</Label><div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input placeholder="+243 XXX XXX XXX" value={loginPhone} onChange={e => setLoginPhone(formatPhone(e.target.value))} className="pl-10" /></div></div>
-            <div className="space-y-2"><Label>{t('password')}</Label><div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input type={showLoginPass ? 'text' : 'password'} placeholder="••••••••" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} className="pl-10 pr-10" onKeyDown={e => e.key === 'Enter' && handleLogin()} /><button onClick={() => setShowLoginPass(!showLoginPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">{showLoginPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
-            <Button className={`w-full ${th.primary} ${th.primaryText}`} onClick={handleLogin} disabled={loginLoading}>{loginLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}{t('login')}</Button>
+            <div className={`flex gap-1 p-1 rounded-lg border ${th.borderColor} ${th.inputBg}`}>
+              {([['phone', 'Téléphone', <Phone key="p" className="h-3.5 w-3.5" />], ['email', 'Email', <Mail key="m" className="h-3.5 w-3.5" />]] as const).map(([k, label, icon]) => (
+                <button key={k} type="button" onClick={() => { setLoginMethod(k); setOtpSent(false); setLoginOtp('') }} className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium rounded-md transition-colors ${loginMethod === k ? `${th.primary} ${th.primaryText}` : `${th.textSecondary} hover:opacity-80`}`}>{icon}{label}</button>
+              ))}
+            </div>
+            {loginMethod === 'phone' ? (<>
+              <div className="space-y-2"><Label>{t('phone')}</Label><div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input placeholder="+243 XXX XXX XXX" value={loginPhone} onChange={e => setLoginPhone(formatPhone(e.target.value))} className="pl-10" /></div></div>
+              <div className="space-y-2"><Label>{t('password')}</Label><div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input type={showLoginPass ? 'text' : 'password'} placeholder="••••••••" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} className="pl-10 pr-10" onKeyDown={e => e.key === 'Enter' && handleLogin()} /><button onClick={() => setShowLoginPass(!showLoginPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">{showLoginPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
+              <Button className={`w-full ${th.primary} ${th.primaryText}`} onClick={handleLogin} disabled={loginLoading}>{loginLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}{t('login')}</Button>
+              <button type="button" onClick={() => { setForgotEmail(loginEmail.trim()); setForgotStep(0); setShowForgot(true) }} className={`w-full text-center text-sm ${th.accent} hover:underline`}>Mot de passe oublié ?</button>
+            </>) : (<>
+              <div className="space-y-2"><Label>Adresse email</Label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input type="email" placeholder="email@exemple.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} className="pl-10" /></div></div>
+              {!otpSent ? (
+                <Button variant="outline" className={`w-full ${th.accent} ${th.accentBorder}`} onClick={() => sendOtp('login')} disabled={otpLoading}>{otpLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}Recevoir le code à 6 chiffres</Button>
+              ) : (<>
+                <div className="space-y-2"><Label>Code reçu par email</Label><div className="relative"><Key className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input inputMode="numeric" maxLength={6} placeholder="000000" value={loginOtp} onChange={e => setLoginOtp(e.target.value.replace(/\D/g, ''))} onKeyDown={e => e.key === 'Enter' && handleLoginEmail()} className="pl-10 text-center tracking-[0.4em] font-mono text-lg" autoFocus /></div></div>
+                <Button className={`w-full ${th.primary} ${th.primaryText}`} onClick={handleLoginEmail} disabled={loginLoading}>{loginLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-2" />}Vérifier et se connecter</Button>
+                <div className="flex items-center justify-between text-xs">
+                  <button type="button" disabled={otpResendIn > 0} onClick={() => sendOtp('login')} className={`${th.accent} hover:underline disabled:opacity-50 disabled:no-underline`}>{otpResendIn > 0 ? `Renvoyer dans ${otpResendIn}s` : 'Renvoyer le code'}</button>
+                  <button type="button" onClick={() => { setForgotEmail(loginEmail.trim()); setForgotStep(0); setShowForgot(true) }} className={`${th.accent} hover:underline`}>Mot de passe oublié ?</button>
+                </div>
+                <button type="button" onClick={() => { setOtpSent(false); setLoginOtp('') }} className={`w-full text-center text-xs ${th.textSecondary} hover:underline`}>Utiliser un autre email</button>
+              </>)}
+            </>)}
             <p className={`text-center text-sm ${th.textSecondary}`}>{t('noAccount')} <button onClick={() => navigate('register')} className={`font-medium ${th.accent} hover:underline`}>{t('register')}</button></p>
           </>)}
         </CardContent></Card>
+        <Dialog open={showForgot} onOpenChange={(o) => { setShowForgot(o); if (!o) { setForgotStep(0); setForgotOtp(''); setForgotPass('') } }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className={`flex items-center gap-2 ${th.textPrimary}`}><Key className={`h-4 w-4 ${th.accent}`} />Mot de passe oublié</DialogTitle>
+              <DialogDescription>{forgotStep === 0 ? 'Entrez l\'adresse email de votre compte : nous vous enverrons un code à 6 chiffres.' : `Code envoyé à ${forgotEmail}. Saisissez-le pour définir un nouveau mot de passe.`}</DialogDescription>
+            </DialogHeader>
+            {forgotStep === 0 ? (<>
+              <div className="space-y-2"><Label>Adresse email</Label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input type="email" placeholder="email@exemple.com" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} className="pl-10" onKeyDown={e => e.key === 'Enter' && sendOtp('reset')} /></div></div>
+              <Button className={`w-full ${th.primary} ${th.primaryText}`} onClick={() => sendOtp('reset')} disabled={forgotLoading}>{forgotLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}Envoyer le code</Button>
+            </>) : (<>
+              <div className="space-y-2"><Label>Code à 6 chiffres</Label><div className="relative"><Key className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input inputMode="numeric" maxLength={6} placeholder="000000" value={forgotOtp} onChange={e => setForgotOtp(e.target.value.replace(/\D/g, ''))} className="pl-10 text-center tracking-[0.4em] font-mono text-lg" autoFocus /></div></div>
+              <div className="space-y-2"><Label>Nouveau mot de passe</Label><div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input type="password" placeholder="Min 6 caractères" value={forgotPass} onChange={e => setForgotPass(e.target.value)} className="pl-10" onKeyDown={e => e.key === 'Enter' && handleResetPassword()} /></div></div>
+              <Button className={`w-full ${th.primary} ${th.primaryText}`} onClick={handleResetPassword} disabled={forgotLoading}>{forgotLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-2" />}Réinitialiser le mot de passe</Button>
+              <div className="flex items-center justify-between text-xs">
+                <button type="button" disabled={forgotResendIn > 0} onClick={() => sendOtp('reset')} className={`${th.accent} hover:underline disabled:opacity-50 disabled:no-underline`}>{forgotResendIn > 0 ? `Renvoyer dans ${forgotResendIn}s` : 'Renvoyer le code'}</button>
+                <button type="button" onClick={() => setForgotStep(0)} className={`${th.accent} hover:underline`}>Changer d'email</button>
+              </div>
+            </>)}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )
