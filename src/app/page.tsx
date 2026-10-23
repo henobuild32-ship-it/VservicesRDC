@@ -350,10 +350,14 @@ export default function VServiceRDC() {
   const savePaymentAccount = async () => { if (!accountHolder.trim() || !accountPhone.trim() || accountPhone !== accountPhoneConfirmation) { toast({ title: 'Coordonnées incomplètes', description: 'Le numéro et sa confirmation doivent correspondre.', variant: 'destructive' }); return }; try { const r = await fetch('/api/payment-accounts', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ operator: accountOperator, phone: accountPhone, phoneConfirmation: accountPhoneConfirmation, holderName: accountHolder, isDefault: paymentAccounts.length === 0 }) }); if (!r.ok) throw new Error((await r.json()).error || 'Erreur'); setAccountPhone(''); setAccountPhoneConfirmation(''); setAccountHolder(''); await loadMyPayments(); toast({ title: 'Coordonnées enregistrées' }) } catch (e) { toast({ title: 'Impossible d’enregistrer', description: e instanceof Error ? e.message : 'Réessayez.', variant: 'destructive' }) } }
 
   const fetchUserProfile = async () => {
+    const activeToken = token
+    if (!activeToken) return
     try {
-      const res = await fetch('/api/auth/me', { headers: authHeaders() })
+      const res = await fetch('/api/auth/me', { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${activeToken}` } })
       if (res.ok) {
         const d = await res.json()
+        // Une ancienne requête ne doit jamais remettre l'ancien compte dans l'interface.
+        if (activeToken !== token || localStorage.getItem('vservicerdc_token') !== activeToken) return
         setUser({ id: d.id, phone: d.phone, email: d.email, role: d.role, status: d.status, certified: d.certified, certificationStatus: d.certificationStatus, certificationMessage: d.certificationMessage, autoReplyMessage: d.autoReplyMessage, deletionReason: d.deletionReason, deletionRequestedAt: d.deletionRequestedAt, adminMustChangePassword: d.adminMustChangePassword, profile: d.profile || undefined })
         const r = d.role as string
         if (r === 'ADMIN') navigate('admin-dashboard')
@@ -368,9 +372,11 @@ export default function VServiceRDC() {
   /* eslint-disable react-hooks/set-state-in-effect -- initial loading sync */
   useEffect(() => {
     if (!token) { setInitialLoading(false); return }
-    if (user) { setInitialLoading(false); return }
     fetchUserProfile().finally(() => setInitialLoading(false))
-  }, [token, user])
+    // Le chargement est lié uniquement au token courant. Une réponse tardive
+    // d'un ancien compte est ignorée dans fetchUserProfile.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
   /* eslint-enable react-hooks/set-state-in-effect */
   useEffect(() => { if (user && typeof window !== 'undefined' && !localStorage.getItem('vservicerdc_onboarded')) { const tm = setTimeout(() => setShowOnboarding(true), 500); return () => clearTimeout(tm) } }, [user])
 
@@ -828,7 +834,8 @@ export default function VServiceRDC() {
       if (res.ok) {
         if (editPhoto) { const fd = new FormData(); fd.append('file', editPhoto); fd.append('type', user.role === 'ENTREPRISE' ? 'company-logo' : 'provider-photo'); await fetch('/api/upload', { method: 'POST', headers: multiPartHeaders(), body: fd }) }
         toast({ title: t('saved'), description: t('savedDesc') })
-        const mr = await fetch('/api/auth/me', { headers: authHeaders() }); if (mr.ok) { const md = await mr.json(); setUser({ id: md.id, phone: md.phone, email: md.email, role: md.role, status: md.status, certified: md.certified, certificationStatus: md.certificationStatus, certificationMessage: md.certificationMessage, autoReplyMessage: md.autoReplyMessage, deletionReason: md.deletionReason, deletionRequestedAt: md.deletionRequestedAt, profile: md.profile || undefined }) }
+        const savedToken = token
+        const mr = await fetch('/api/auth/me', { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${savedToken}` } }); if (mr.ok && savedToken === token && localStorage.getItem('vservicerdc_token') === savedToken) { const md = await mr.json(); setUser({ id: md.id, phone: md.phone, email: md.email, role: md.role, status: md.status, certified: md.certified, certificationStatus: md.certificationStatus, certificationMessage: md.certificationMessage, autoReplyMessage: md.autoReplyMessage, deletionReason: md.deletionReason, deletionRequestedAt: md.deletionRequestedAt, profile: md.profile || undefined }) }
         if (user.role === 'CLIENT') navigate('client-dashboard'); else if (user.role === 'PRESTATAIRE') navigate('prestataire-dashboard'); else navigate('entreprise-dashboard')
       } else toast({ title: 'Erreur', variant: 'destructive' })
     } catch { toast({ title: 'Erreur', variant: 'destructive' }) }
