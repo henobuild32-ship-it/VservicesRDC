@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
+import { isValidEmail } from '@/lib/otp';
 import { createSession } from '@/lib/session';
 
 function makeSlug(name: string): string {
@@ -56,6 +57,16 @@ export async function POST(req: NextRequest) {
 
     if (!phone || !password || !role) {
       return NextResponse.json({ error: 'Téléphone, mot de passe et type de compte sont requis' }, { status: 400 });
+    }
+
+    if (!email || !email.trim()) {
+      return NextResponse.json(
+        { error: "L'adresse email est requise : elle sert à la connexion par code et à la récupération du mot de passe." },
+        { status: 400 }
+      );
+    }
+    if (!isValidEmail(email)) {
+      return NextResponse.json({ error: 'Adresse email invalide.' }, { status: 400 });
     }
 
     if (!['CLIENT', 'PRESTATAIRE', 'ENTREPRISE'].includes(role)) {
