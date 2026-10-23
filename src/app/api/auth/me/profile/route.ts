@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/session';
-import { hashPassword } from '@/lib/auth';
+import { hashPassword, verifyPassword } from '@/lib/auth';
 
 function makeSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'user';
@@ -150,9 +150,24 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Mot de passe trop court (min 6 caractères)' }, { status: 400 });
     }
 
+    const user = await db.user.findUnique({ where: { id: session.userId } });
+    if (!user) {
+      return NextResponse.json({ error: 'Utilisateur non trouvé' }, { status: 404 });
+    }
+    if (!body.currentPassword || typeof body.currentPassword !== 'string') {
+      return NextResponse.json({ error: 'Mot de passe actuel requis' }, { status: 400 });
+    }
+    const currentOk = await verifyPassword(body.currentPassword, user.password);
+    if (!currentOk) {
+      return NextResponse.json({ error: 'Mot de passe actuel incorrect' }, { status: 401 });
+    }
+
     await db.user.update({
       where: { id: session.userId },
-      data: { password: await hashPassword(body.newPassword) },
+      data: {
+        password: await hashPassword(body.newPassword),
+        ...(user.role === 'ADMIN' ? { adminMustChangePassword: false } : {}),
+      },
     });
 
     await db.userActivity.create({

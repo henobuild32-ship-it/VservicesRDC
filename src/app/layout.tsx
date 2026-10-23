@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { OfflineStatus } from "@/components/offline-status";
+import { UpdateNotice } from "@/components/update-notice";
 import Script from "next/script";
 
 const geistSans = Geist({
@@ -18,8 +20,6 @@ export const viewport: Viewport = {
   themeColor: "#059669",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
 };
 
@@ -77,12 +77,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
+        <OfflineStatus />
+        <UpdateNotice />
         {children}
         <Toaster />
         <Script id="pwa-register" strategy="afterInteractive">
           {`
             if ('serviceWorker' in navigator) {
-              navigator.serviceWorker.register('/sw.js').catch(() => {});
+              navigator.serviceWorker.register('/sw.js').catch((error) => {
+                console.error('Impossible d’activer le mode hors ligne :', error);
+              });
             }
             window.addEventListener('beforeinstallprompt', (e) => {
               e.preventDefault();

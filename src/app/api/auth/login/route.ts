@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { verifyPassword, hashPassword, ADMIN_DEFAULT_PASSWORD } from '@/lib/auth';
+import { verifyPassword, hashPassword, getAdminPassword } from '@/lib/auth';
 import { createSession } from '@/lib/session';
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -29,28 +29,64 @@ export async function POST(req: NextRequest) {
 
     // Admin-only login: only adminPassword field
     if (isAdmin && adminPassword) {
-      if (adminPassword !== ADMIN_DEFAULT_PASSWORD) {
-        return NextResponse.json({ error: 'Mot de passe administrateur incorrect' }, { status: 401 });
+      const configured = getAdminPassword();
+      if (!configured) {
+        return NextResponse.json(
+          { error: 'Configuration administrateur manquante (variable ADMIN_PASSWORD).' },
+          { status: 500 }
+        );
       }
-      // Find or create admin user
+
       let admin = await db.user.findFirst({ where: { role: 'ADMIN' } });
+
       if (!admin) {
+        // Premier demarrage : seul le mot de passe defini en env cree le compte
+        if (adminPassword !== configured) {
+          return NextResponse.json({ error: 'Mot de passe administrateur incorrect' }, { status: 401 });
+        }
         admin = await db.user.create({
           data: {
             phone: '+243000000000',
-            password: await hashPassword(ADMIN_DEFAULT_PASSWORD),
+            password: await hashPassword(configured),
             role: 'ADMIN',
             status: 'approved',
+            adminMustChangePassword: true,
           },
         });
+      } else {
+        // Compte existant : verification contre le hash stocke (mdp personnel ou partage)
+        const valid = await verifyPassword(adminPassword, admin.password);
+        if (!valid) {
+          return NextResponse.json({ error: 'Mot de passe administrateur incorrect' }, { status: 401 });
+        }
       }
+
+      // Tant que le mdp utilise est celui partage (env), changement impose
+      const mustChange =
+        admin.adminMustChangePassword || (await verifyPassword(configured, admin.password));
+      if (mustChange && !admin.adminMustChangePassword) {
+        admin = await db.user.update({
+          where: { id: admin.id },
+          data: { adminMustChangePassword: true },
+        });
+      }
+
+      await db.userActivity.create({
+        data: {
+          userId: admin.id,
+          action: 'login',
+          details: JSON.stringify({ ip, time: new Date().toISOString(), method: 'admin' }),
+        },
+      });
+
       const token = createSession(admin.id, 'ADMIN');
       return NextResponse.json({
         user: {
           id: admin.id,
           phone: admin.phone,
           role: 'ADMIN',
-          status: 'approved',
+          status: admin.status,
+          adminMustChangePassword: mustChange,
         },
         token,
       });

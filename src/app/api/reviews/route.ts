@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     }
 
     const reviews = await db.review.findMany({
-      where: { targetId },
+      where: { targetId, hidden: false },
       include: {
         author: {
           select: {

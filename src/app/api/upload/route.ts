@@ -22,6 +22,9 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buf = Buffer.from(bytes);
     const maxWidth = type === 'provider-photo' || type === 'company-logo' || type === 'employee-photo' ? 400 : 800;
+    if (type === 'payment-proof' && !['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
+      return NextResponse.json({ error: 'La preuve doit être au format JPG ou PNG' }, { status: 400 });
+    }
     const resized = await resizeImage(buf, maxWidth);
     const mimeType = file.type || 'image/jpeg';
     const base64 = resized.toString('base64');

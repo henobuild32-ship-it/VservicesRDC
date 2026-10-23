@@ -115,10 +115,59 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    box-sizing: border-box;
   }
   body {
     @apply bg-background text-foreground;
   }
+}
+
+html {
+  min-width: 320px;
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+img,
+video,
+iframe,
+svg {
+  max-width: 100%;
+}
+
+button,
+[role="button"],
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea {
+  font-size: max(1rem, 16px);
+}
+
+body,
+main,
+section,
+article,
+aside,
+header,
+footer,
+nav,
+div,
+p,
+h1,
+h2,
+h3,
+h4,
+button,
+a {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Custom scrollbar for better appearance */

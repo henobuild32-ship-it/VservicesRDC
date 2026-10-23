@@ -32,7 +32,7 @@ import {
   Sparkles, ShieldCheck, TrendingUp, FileText, ThumbsUp,
   MoreVertical, Lock, Key, Copy, ExternalLink, Store, Wrench,
   Smartphone, ChevronDown, IdCard, UserCheck, Filter, Zap, Download, Moon, Sun, Palette, Save, Image, Video, Grid,
-  Rocket, Handshake, HeartHandshake
+  Rocket, Handshake, HeartHandshake, Wallet
 } from 'lucide-react'
 
 // ============================================================
@@ -54,6 +54,7 @@ type ThemeMode = 'green' | 'dark' | 'red'
 
 interface UserProfile {
   id: string; phone: string; email?: string; role: AccountType; status?: string
+  adminMustChangePassword?: boolean
   certified?: boolean; certificationStatus?: string | null; certificationMessage?: string | null
   autoReplyMessage?: string | null; deletionReason?: string | null; deletionRequestedAt?: string | null
   profile?: { fullName?: string; companyName?: string; photo?: string; logo?: string; coverPhoto?: string
@@ -83,6 +84,7 @@ interface Conversation { id: string; otherUser: { id: string; phone: string; rol
   lastMessage: { content: string; senderId: string; createdAt: string; read: boolean } | null;
   unreadCount: number; lastMessageAt: string }
 interface ChatMsg { id: string; senderId: string; content: string; read: boolean; createdAt: string }
+interface MarketplaceRequest { id: string; title: string; description: string; service: string; province?: string | null; commune?: string | null; budgetMin?: string | number | null; budgetMax?: string | number | null; urgent: boolean; status: string; quotes?: any[]; contract?: any }
 
 // ============================================================
 // THEME SYSTEM
@@ -275,6 +277,11 @@ export default function VServiceRDC() {
   // Search
   const [searchKey, setSearchKey] = useState(0); const [searchAllCommunes, setSearchAllCommunes] = useState(false); const [customServiceInput, setCustomServiceInput] = useState('')
   const [searchPage, setSearchPage] = useState(1); const [searchTotalPages, setSearchTotalPages] = useState(1); const [searchTotal, setSearchTotal] = useState(0)
+  const [marketplaceRequests, setMarketplaceRequests] = useState<MarketplaceRequest[]>([])
+  const [marketplaceMine, setMarketplaceMine] = useState<MarketplaceRequest[]>([])
+  const [marketplaceOpen, setMarketplaceOpen] = useState(false)
+  const [marketplaceTitle, setMarketplaceTitle] = useState(''); const [marketplaceService, setMarketplaceService] = useState(''); const [marketplaceDescription, setMarketplaceDescription] = useState(''); const [marketplaceBudget, setMarketplaceBudget] = useState(''); const [marketplaceUrgent, setMarketplaceUrgent] = useState(false); const [marketplaceLoading, setMarketplaceLoading] = useState(false)
+  const [myPayments, setMyPayments] = useState<any[]>([]); const [paymentAccounts, setPaymentAccounts] = useState<any[]>([]); const [accountOperator, setAccountOperator] = useState('M-Pesa'); const [accountPhone, setAccountPhone] = useState(''); const [accountPhoneConfirmation, setAccountPhoneConfirmation] = useState(''); const [accountHolder, setAccountHolder] = useState(''); const [mpesaConfig, setMpesaConfig] = useState({ mpesa_platform_phone: '+243862719972', withdrawal_fee_usd: '1.80' }); const [paymentLoading, setPaymentLoading] = useState(false); const [proofPayment, setProofPayment] = useState<any>(null); const [proofReference, setProofReference] = useState(''); const [proofAmount, setProofAmount] = useState(''); const [proofUrl, setProofUrl] = useState('')
 
   useEffect(() => { localStorage.setItem('vservicerdc_theme', theme) }, [theme])
   useEffect(() => { localStorage.setItem('vservicerdc_lang', lang) }, [lang])
@@ -283,12 +290,67 @@ export default function VServiceRDC() {
   const authHeaders = useCallback(() => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }), [token])
   const multiPartHeaders = useCallback(() => ({ 'Authorization': `Bearer ${token}` }), [token])
 
+  const loadMarketplace = useCallback(async () => {
+    if (!token) return
+    try {
+      const [available, mine] = await Promise.all([
+        fetch('/api/marketplace?kind=requests', { headers: authHeaders() }),
+        fetch('/api/marketplace?kind=mine', { headers: authHeaders() }),
+      ])
+      if (available.ok) setMarketplaceRequests((await available.json()).requests || [])
+      if (mine.ok) setMarketplaceMine((await mine.json()).requests || [])
+    } catch { /* Les données locales restent visibles hors connexion. */ }
+  }, [token, authHeaders])
+
+  const createMarketplaceRequest = async () => {
+    if (!marketplaceTitle.trim() || !marketplaceService.trim() || !marketplaceDescription.trim()) {
+      toast({ title: 'Informations manquantes', description: 'Indiquez le service, le titre et les détails.', variant: 'destructive' }); return
+    }
+    setMarketplaceLoading(true)
+    try {
+      const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+      const r = await fetch('/api/marketplace', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'request', idempotencyKey, title: marketplaceTitle, service: marketplaceService, description: marketplaceDescription, budgetMax: marketplaceBudget || null, urgent: marketplaceUrgent }) })
+      if (!r.ok) throw new Error('request')
+      setMarketplaceTitle(''); setMarketplaceService(''); setMarketplaceDescription(''); setMarketplaceBudget(''); setMarketplaceUrgent(false); setMarketplaceOpen(false)
+      await loadMarketplace(); toast({ title: 'Demande enregistrée', description: 'Les prestataires pourront vous envoyer une proposition.' })
+    } catch { toast({ title: 'Demande conservée localement', description: 'Elle sera envoyée dès le retour de la connexion.' }) }
+    setMarketplaceLoading(false)
+  }
+
+  const loadMyPayments = useCallback(async () => {
+    if (!token) return
+    try { const [r, a] = await Promise.all([fetch('/api/payments', { headers: authHeaders() }), fetch('/api/payment-accounts', { headers: authHeaders() })]); if (r.ok) { const data = await r.json(); setMyPayments(data.payments || []); setMpesaConfig(data.config || mpesaConfig) }; if (a.ok) setPaymentAccounts((await a.json()).accounts || []) } catch { /* cache/service worker keeps the last data */ }
+  }, [token, authHeaders])
+
+  const prepareSubscriptionPayment = async (plan: string, amount: number) => {
+    setPaymentLoading(true)
+    try {
+      const r = await fetch('/api/marketplace', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'payment', purpose: 'SUBSCRIPTION', amount, currency: 'CDF', fee: 1.8, idempotencyKey: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`, metadata: { plan } }) })
+      if (!r.ok) throw new Error('payment')
+      await loadMyPayments(); toast({ title: 'Paiement préparé', description: 'Envoyez le total via le moyen indiqué, puis transmettez la preuve.' })
+    } catch { toast({ title: 'Paiement en attente de connexion', description: 'Votre préparation sera envoyée au retour du réseau.' }) }
+    setPaymentLoading(false)
+  }
+
+  const submitPaymentProof = async () => {
+    if (!proofPayment || !proofReference.trim() || !proofAmount || !proofUrl.trim()) { toast({ title: 'Preuve incomplète', description: 'Référence, montant et photo requis.', variant: 'destructive' }); return }
+    setPaymentLoading(true)
+    try { const r = await fetch('/api/payments', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'proof', paymentId: proofPayment.id, transactionReference: proofReference, amountReceived: Number(proofAmount), proofUrl }) }); if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'proof') }; setProofPayment(null); setProofReference(''); setProofAmount(''); setProofUrl(''); await loadMyPayments(); toast({ title: 'Preuve envoyée', description: 'Paiement en attente de vérification.' }) } catch (e) { toast({ title: 'Impossible d’envoyer la preuve', description: e instanceof Error ? e.message : 'Réessayez.', variant: 'destructive' }) }
+    setPaymentLoading(false)
+  }
+  const uploadPaymentProof = async (file: File) => {
+    if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) { toast({ title: 'Format refusé', description: 'Utilisez JPG ou PNG.', variant: 'destructive' }); return }
+    const form = new FormData(); form.append('file', file); form.append('type', 'payment-proof')
+    try { const r = await fetch('/api/upload', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form }); if (!r.ok) throw new Error('upload'); const d = await r.json(); setProofUrl(d.url); toast({ title: 'Preuve compressée et ajoutée' }) } catch { toast({ title: 'Preuve conservée localement', description: 'Réessayez à la reconnexion.' }) }
+  }
+  const savePaymentAccount = async () => { if (!accountHolder.trim() || !accountPhone.trim() || accountPhone !== accountPhoneConfirmation) { toast({ title: 'Coordonnées incomplètes', description: 'Le numéro et sa confirmation doivent correspondre.', variant: 'destructive' }); return }; try { const r = await fetch('/api/payment-accounts', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ operator: accountOperator, phone: accountPhone, phoneConfirmation: accountPhoneConfirmation, holderName: accountHolder, isDefault: paymentAccounts.length === 0 }) }); if (!r.ok) throw new Error((await r.json()).error || 'Erreur'); setAccountPhone(''); setAccountPhoneConfirmation(''); setAccountHolder(''); await loadMyPayments(); toast({ title: 'Coordonnées enregistrées' }) } catch (e) { toast({ title: 'Impossible d’enregistrer', description: e instanceof Error ? e.message : 'Réessayez.', variant: 'destructive' }) } }
+
   const fetchUserProfile = async () => {
     try {
       const res = await fetch('/api/auth/me', { headers: authHeaders() })
       if (res.ok) {
         const d = await res.json()
-        setUser({ id: d.id, phone: d.phone, email: d.email, role: d.role, status: d.status, certified: d.certified, certificationStatus: d.certificationStatus, certificationMessage: d.certificationMessage, autoReplyMessage: d.autoReplyMessage, deletionReason: d.deletionReason, deletionRequestedAt: d.deletionRequestedAt, profile: d.profile || undefined })
+        setUser({ id: d.id, phone: d.phone, email: d.email, role: d.role, status: d.status, certified: d.certified, certificationStatus: d.certificationStatus, certificationMessage: d.certificationMessage, autoReplyMessage: d.autoReplyMessage, deletionReason: d.deletionReason, deletionRequestedAt: d.deletionRequestedAt, adminMustChangePassword: d.adminMustChangePassword, profile: d.profile || undefined })
         const r = d.role as string
         if (r === 'ADMIN') navigate('admin-dashboard')
         else if (r === 'CLIENT') navigate('client-dashboard')
@@ -452,7 +514,7 @@ export default function VServiceRDC() {
       try {
         const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isAdmin: true, adminPassword: loginAdminPass }) })
         const d = await r.json()
-        if (r.ok) { localStorage.setItem('vservicerdc_token', d.token); setToken(d.token); setUser({ id: d.user.id, phone: d.user.phone, role: 'ADMIN', status: d.user.status }); navigate('admin-dashboard'); toast({ title: 'Connexion admin réussie' }) }
+        if (r.ok) { localStorage.setItem('vservicerdc_token', d.token); setToken(d.token); setUser({ id: d.user.id, phone: d.user.phone, role: 'ADMIN', status: d.user.status, adminMustChangePassword: d.user.adminMustChangePassword }); navigate('admin-dashboard'); toast({ title: 'Connexion admin réussie' }) }
         else toast({ title: 'Erreur', description: d.error || 'Mot de passe incorrect.', variant: 'destructive' })
       } catch { toast({ title: 'Erreur', description: 'Erreur serveur.', variant: 'destructive' }) }
       setLoginLoading(false); return
@@ -556,9 +618,10 @@ export default function VServiceRDC() {
   const [searchSector, setSearchSector] = useState(''); const [searchService, setSearchService] = useState('')
   const [searchQuery, setSearchQuery] = useState(''); const [searchTargetType, setSearchTargetType] = useState<'' | 'PRESTATAIRE' | 'ENTREPRISE'>('')
   const [searchResults, setSearchResults] = useState<ProviderResult[]>([]); const [searchLoading, setSearchLoading] = useState(false); const [hasSearched, setHasSearched] = useState(false)
+  const [searchError, setSearchError] = useState('')
 
   const handleSearch = async (useMyCity?: boolean, pageNum?: number) => {
-    setSearchLoading(true); setHasSearched(true)
+    setSearchLoading(true); setHasSearched(true); setSearchError('')
     const pg = pageNum || searchPage
     try {
       const params = new URLSearchParams()
@@ -572,26 +635,39 @@ export default function VServiceRDC() {
       if (searchQuery) params.set('query', searchQuery)
       params.set('page', String(pg))
       params.set('limit', '20')
-      const res = await fetch(`/api/providers?${params.toString()}`)
-      if (res.ok) { const d = await res.json(); setSearchResults(d.results || []); setSearchPage(d.page || 1); setSearchTotalPages(d.totalPages || 1); setSearchTotal(d.total || 0) }
-    } catch { /* */ }
-    setSearchLoading(false)
+      const res = await fetch(`/api/providers?${params.toString()}`, { headers: authHeaders() })
+      if (!res.ok) throw new Error('La recherche est momentanément indisponible. Vérifiez votre connexion et réessayez.')
+      const d = await res.json()
+      setSearchResults(d.results || []); setSearchPage(d.page || 1); setSearchTotalPages(d.totalPages || 1); setSearchTotal(d.total || 0)
+    } catch (error) {
+      setSearchError(error instanceof Error ? error.message : 'La recherche a échoué. Réessayez.')
+    } finally {
+      setSearchLoading(false)
+    }
   }
 
-  const searchByType = (type: 'PRESTATAIRE' | 'ENTREPRISE') => { setSearchTargetType(type); setHasSearched(true); setSearchLoading(true); setSearchPage(1); setSearchKey(k => k + 1) }
+  const searchByType = (type: 'PRESTATAIRE' | 'ENTREPRISE') => { setSearchTargetType(type); setHasSearched(true); setSearchError(''); setSearchLoading(true); setSearchPage(1); setSearchKey(k => k + 1) }
 
   useEffect(() => {
     if (searchTargetType && hasSearched) {
+      setSearchError('');
       (async () => {
         try {
           const params = new URLSearchParams(); params.set('role', searchTargetType)
-          const res = await fetch(`/api/providers?${params.toString()}`)
-          if (res.ok) { const d = await res.json(); setSearchResults(d.results || []) }
-        } catch { /* */ }
-        setSearchLoading(false)
+          const res = await fetch(`/api/providers?${params.toString()}`, { headers: authHeaders() })
+          if (!res.ok) throw new Error('La recherche est momentanément indisponible. Vérifiez votre connexion et réessayez.')
+          const d = await res.json()
+          setSearchResults(d.results || [])
+          setSearchTotal(d.total || 0)
+          setSearchTotalPages(d.totalPages || 1)
+        } catch (error) {
+          setSearchError(error instanceof Error ? error.message : 'La recherche a échoué. Réessayez.')
+        } finally {
+          setSearchLoading(false)
+        }
       })()
     }
-  }, [searchTargetType, searchKey])
+  }, [searchTargetType, searchKey, hasSearched, authHeaders])
 
   const viewProviderDetail = async (providerId: string) => {
     setLoading(true)
@@ -633,6 +709,7 @@ export default function VServiceRDC() {
   const [adminActions, setAdminActions] = useState<any[]>([])
   const [activeSectorEdit, setActiveSectorEdit] = useState<number | null>(null)
   const [adminCertRequests, setAdminCertRequests] = useState<any[]>([])
+  const [adminFinancial, setAdminFinancial] = useState<any>({ totals: {}, payments: [], disputes: [] })
   const [certMsg, setCertMsg] = useState('')
   const [certActionUserId, setCertActionUserId] = useState('')
   const [certDialogOpen, setCertDialogOpen] = useState(false)
@@ -653,6 +730,7 @@ export default function VServiceRDC() {
       const srr = await fetch('/api/admin/settings', { headers: authHeaders() }); if (srr.ok) { const d = await srr.json(); if (d.welcome_message) setSettingsWelcome(d.welcome_message); if (d.contact_email) setSettingsContactEmail(d.contact_email); if (d.maintenance_mode) setSettingsMaintenanceMode(d.maintenance_mode === 'true') }
       const acr = await fetch('/api/admin/actions', { headers: authHeaders() }); if (acr.ok) setAdminActions((await acr.json()).actions || [])
       const ccr = await fetch('/api/admin/certification', { headers: authHeaders() }); if (ccr.ok) setAdminCertRequests((await ccr.json()).requests || [])
+      const fr = await fetch('/api/admin/financial', { headers: authHeaders() }); if (fr.ok) setAdminFinancial(await fr.json())
       fetchAdminRealisations()
     } catch { /* */ }
   }
@@ -669,6 +747,7 @@ export default function VServiceRDC() {
   const handleReviewAction = async (reviewId: string, action: string) => { try { const r = await fetch('/api/admin/reviews', { method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ reviewId, action }) }); if (r.ok) { const rr = await fetch('/api/admin/reviews', { headers: authHeaders() }); if (rr.ok) setAdminReviews((await rr.json()).reviews || []); toast({ title: 'Action effectuée' }) } } catch { /* */ } }
   const handleSaveSectors = async () => { try { const r = await fetch('/api/admin/sectors', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ sectors: adminSectorsData }) }); if (r.ok) { toast({ title: 'Secteurs mis à jour' }); fetchAdminData() } else toast({ title: 'Erreur', variant: 'destructive' }) } catch { /* */ } }
   const handleSaveSetting = async (key: string, value: string) => { try { const r = await fetch('/api/admin/settings', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ key, value }) }); if (r.ok) { toast({ title: 'Paramètre mis à jour' }); fetchAdminData() } } catch { /* */ } }
+  const handlePaymentReview = async (paymentId: string, action: 'VALIDATE' | 'REJECT') => { const reason = action === 'REJECT' ? prompt('Motif du rejet') || 'Preuve non validée' : undefined; try { const r = await fetch('/api/payments', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ paymentId, action, reason }) }); if (r.ok) { toast({ title: action === 'VALIDATE' ? 'Paiement validé' : 'Paiement rejeté' }); fetchAdminData() } else toast({ title: 'Action impossible', variant: 'destructive' }) } catch { toast({ title: 'Erreur réseau', variant: 'destructive' }) } }
   const exportCSV = () => { const rows = [['Nom','Téléphone','Email','Rôle','Statut','Date d\'inscription'].join(',')]; const filtered = adminUsers.filter(u => { if (adminRoleFilter && adminRoleFilter !== 'all' && u.role !== adminRoleFilter) return false; if (adminStatusFilter && adminStatusFilter !== 'all' && u.status !== adminStatusFilter) return false; return true }).slice(0, 500); for (const u of filtered) { const name = u.profile?.companyName || u.profile?.fullName || ''; const date = new Date(u.createdAt).toLocaleDateString('fr-FR'); rows.push([`"${name}"`,u.phone,u.email||'',u.role,u.status,date].join(',')) } const blob = new Blob([rows.join('\n')], { type: 'text/csv' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'utilisateurs.csv'; a.click(); URL.revokeObjectURL(url) }
   const filteredUsers = useMemo(() => {
     let list = adminUsers.filter(u => {
@@ -747,11 +826,11 @@ export default function VServiceRDC() {
 
   // Settings
   const [contactName, setContactName] = useState(''); const [contactEmail, setContactEmail] = useState(''); const [contactMessage, setContactMessage] = useState(''); const [contactLoading, setContactLoading] = useState(false)
-  const [showChangePass, setShowChangePass] = useState(false); const [newPassword, setNewPassword] = useState(''); const [changePassLoading, setChangePassLoading] = useState(false)
+  const [showChangePass, setShowChangePass] = useState(false); const [newPassword, setNewPassword] = useState(''); const [currentPassword, setCurrentPassword] = useState(''); const [changePassLoading, setChangePassLoading] = useState(false)
   // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on view change
   useEffect(() => { if (currentView === 'settings') { void fetchNotifications(); void fetchContactMessages() } }, [currentView])
   const handleContact = async () => { if (!contactName || !contactEmail || !contactMessage) return; setContactLoading(true); try { const r = await fetch('/api/contact', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: contactName, email: contactEmail, message: contactMessage }) }); if (r.ok) { toast({ title: t('send') }); setContactName(''); setContactEmail(''); setContactMessage('') } } catch { /* */ }; setContactLoading(false) }
-  const handleChangePassword = async () => { if (!newPassword || newPassword.length < 6) return; setChangePassLoading(true); try { const r = await fetch('/api/auth/me/profile', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ newPassword }) }); if (r.ok) { toast({ title: 'Mot de passe modifié' }); setShowChangePass(false); setNewPassword('') } } catch { /* */ }; setChangePassLoading(false) }
+  const handleChangePassword = async () => { if (!currentPassword) { toast({ title: 'Erreur', description: 'Saisissez votre mot de passe actuel.', variant: 'destructive' }); return }; if (!newPassword || newPassword.length < 6) { toast({ title: 'Erreur', description: 'Nouveau mot de passe : minimum 6 caractères.', variant: 'destructive' }); return }; if (newPassword === currentPassword) { toast({ title: 'Erreur', description: 'Le nouveau mot de passe doit être différent de l\'actuel.', variant: 'destructive' }); return }; setChangePassLoading(true); try { const r = await fetch('/api/auth/me/profile', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ currentPassword, newPassword }) }); if (r.ok) { setUser(prev => prev ? { ...prev, adminMustChangePassword: false } : prev); toast({ title: 'Mot de passe modifié' }); setShowChangePass(false); setNewPassword(''); setCurrentPassword('') } else { const d = await r.json().catch(() => ({} as any)); toast({ title: 'Erreur', description: d.error || 'Impossible de modifier le mot de passe.', variant: 'destructive' }) } } catch { toast({ title: 'Erreur', description: 'Erreur serveur.', variant: 'destructive' }) }; setChangePassLoading(false) }
 
   // Auto-reply save
   const handleSaveAutoReply = async () => { if (!token) return; setAutoReplyLoading(true); try { const r = await fetch('/api/auth/me/profile', { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ autoReplyMessage: autoReplyMsg || null }) }); if (r.ok) { toast({ title: 'Message automatique enregistré' }); setUser(p => p ? { ...p, autoReplyMessage: autoReplyMsg || null } : p) } else toast({ title: 'Erreur', variant: 'destructive' }) } catch { /* */ }; setAutoReplyLoading(false) }
@@ -799,6 +878,10 @@ export default function VServiceRDC() {
       })()
     }
   }, [currentView])
+  useEffect(() => {
+    if (currentView === 'client-dashboard' || currentView === 'prestataire-dashboard' || currentView === 'entreprise-dashboard') void loadMarketplace()
+  }, [currentView, loadMarketplace])
+  useEffect(() => { if (currentView === 'settings') void loadMyPayments() }, [currentView, loadMyPayments])
 
   // ============================================================
   // SUSPENDED OVERLAY
@@ -1297,6 +1380,7 @@ export default function VServiceRDC() {
   // Search results content helper (extracted to avoid Turbopack parsing depth issues)
   const renderSearchResultsContent = () => {
     if (searchLoading) return <div className="text-center py-12"><div className="w-16 h-16 mx-auto mb-4"><div className="w-full h-full rounded-full border-4 border-t-emerald-500 border-emerald-100 animate-spin"><div className="w-full h-full p-2"><Globe className="w-full h-full text-emerald-500" /></div></div></div><p className={'text-sm font-medium ' + th.accent}>Recherche des meilleurs resultats...</p><p className={'text-xs ' + th.textSecondary + ' mt-1'}>Analyse en cours...</p></div>
+    if (searchError) return <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center" role="alert"><p className="text-sm text-amber-900">{searchError}</p><Button className="mt-3 min-h-11" variant="outline" onClick={() => handleSearch()}><RefreshCw className="mr-2 h-4 w-4" />Réessayer</Button></div>
     if (!hasSearched) return <div className="text-center py-12"><Search className={'h-12 w-12 mx-auto ' + th.accentLight + ' mb-3'} /><p className={th.textSecondary}>{t('whatAreYouLookingFor')}</p></div>
     return <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-1"><p className={'text-sm font-medium ' + th.textPrimary}>{searchTotal} {searchTargetType === 'ENTREPRISE' ? 'entreprise(s)' : searchTargetType === 'PRESTATAIRE' ? 'prestataire(s)' : 'resultat(s)'}</p><div className="flex items-center gap-1">{user && user.role === 'CLIENT' && favorites.length > 0 ? <Button variant={searchResults.every(r => favorites.includes(r.id)) ? 'default' : 'outline'} size="sm" className={'text-xs h-7 ' + (searchResults.every(r => favorites.includes(r.id)) ? 'bg-red-500 text-white' : '')} onClick={() => { if (searchResults.every(r => favorites.includes(r.id))) handleSearch(false); else setSearchResults(p => p.filter(r => favorites.includes(r.id))) }}><Heart className={'h-3 w-3 mr-1 text-red-400'} />{favorites.length}</Button> : null}{searchTotalPages > 1 ? <div className="flex items-center gap-1"><Button variant="outline" size="sm" disabled={searchPage <= 1} onClick={() => handleSearch(false, searchPage - 1)}><ChevronLeft className="h-3 w-3" /></Button><span className="text-xs text-gray-500 px-1">{searchPage}/{searchTotalPages}</span><Button variant="outline" size="sm" disabled={searchPage >= searchTotalPages} onClick={() => handleSearch(false, searchPage + 1)}><ChevronRight className="h-3 w-3" /></Button></div> : null}</div></div>
@@ -1346,6 +1430,14 @@ export default function VServiceRDC() {
   {conversations.length > 0 && <Card className="mb-4"><CardContent className="p-3"><div className="flex items-center justify-between mb-2"><h4 className={'text-sm font-semibold ' + th.textPrimary}>Conversations recentes</h4><button onClick={() => navigate('chat')} className={'text-xs ' + th.accent}>Voir tout</button></div><div className="space-y-1">{conversations.slice(0, 3).map(c => <div key={c.id} onClick={() => { setCurrentChatId(c.id); setChatOtherUser(c.otherUser); navigate('chat-conversation'); fetchChatMessages(c.id) }} className={'flex items-center gap-2 p-2 rounded-lg cursor-pointer ' + (c.unreadCount > 0 ? th.accentLight : '')}><Avatar className="h-7 w-7"><AvatarFallback className={'text-[9px] ' + (theme === 'red' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700')}>{getInitials(c.otherUser.name)}</AvatarFallback></Avatar><div className="flex-1 min-w-0"><p className={'text-xs font-medium truncate ' + th.textPrimary}>{c.otherUser.name}</p><p className={'text-[10px] truncate ' + th.textSecondary}>{c.lastMessage ? c.lastMessage.content : '...'}</p></div>{c.unreadCount > 0 && <span className="w-4 h-4 bg-red-500 text-white text-[8px] rounded-full flex items-center justify-center">{c.unreadCount}</span>}</div>)}</div></CardContent></Card>}
   {favorites.length > 0 && <Card className="mb-4"><CardContent className="p-3"><div className="flex items-center justify-between mb-2"><h4 className={'text-sm font-semibold ' + th.textPrimary}>Mes favoris ({favorites.length})</h4><button onClick={() => { setSearchTargetType(''); setHasSearched(true); setSearchResults([]); handleSearch(false) }} className={'text-xs ' + th.accent}>Voir tout</button></div></CardContent></Card>}</>
 
+  const renderMarketplaceSection = () => <>
+    <Card className="mb-4 border-emerald-200 shadow-sm"><CardContent className="p-4">
+      <div className="flex items-start justify-between gap-3"><div><p className={`text-sm font-bold ${th.textPrimary}`}>Besoin d’une prestation ?</p><p className={`text-xs ${th.textSecondary} mt-1`}>Publiez une demande et comparez les propositions des professionnels.</p></div><Button size="sm" className={`${th.primary} ${th.primaryText} shrink-0`} onClick={() => setMarketplaceOpen(true)}><Plus className="h-4 w-4 mr-1" />Demander</Button></div>
+      {marketplaceMine.length > 0 && <div className="mt-4 border-t pt-3 space-y-2"><p className={`text-xs font-semibold ${th.textPrimary}`}>Mes demandes</p>{marketplaceMine.slice(0, 3).map(item => <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2"><div className="min-w-0"><p className="text-xs font-medium truncate">{item.title}</p><p className="text-[10px] text-gray-500 truncate">{item.service} · {item.quotes?.length || 0} proposition(s)</p></div><Badge variant="secondary" className="text-[10px] shrink-0">{item.status}</Badge></div>)}</div>}
+    </CardContent></Card>
+    <Dialog open={marketplaceOpen} onOpenChange={setMarketplaceOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Publier une demande</DialogTitle><DialogDescription>Les informations peuvent être préparées hors connexion.</DialogDescription></DialogHeader><div className="space-y-3 py-2"><div className="space-y-1"><Label>Service recherché *</Label><Input value={marketplaceService} onChange={e => setMarketplaceService(e.target.value)} placeholder="Ex. Plomberie" /></div><div className="space-y-1"><Label>Titre *</Label><Input value={marketplaceTitle} onChange={e => setMarketplaceTitle(e.target.value)} placeholder="Ex. Réparer une fuite" /></div><div className="space-y-1"><Label>Détails *</Label><Textarea value={marketplaceDescription} onChange={e => setMarketplaceDescription(e.target.value)} rows={4} placeholder="Décrivez votre besoin, le lieu et la date souhaitée" /></div><div className="space-y-1"><Label>Budget maximal (FC, facultatif)</Label><Input inputMode="numeric" value={marketplaceBudget} onChange={e => setMarketplaceBudget(e.target.value.replace(/[^0-9]/g, ''))} /></div><label className="flex items-center gap-2 text-sm"><Checkbox checked={marketplaceUrgent} onCheckedChange={v => setMarketplaceUrgent(v === true)} /> Besoin urgent</label></div><DialogFooter><Button variant="outline" onClick={() => setMarketplaceOpen(false)}>Annuler</Button><Button className={`${th.primary} ${th.primaryText}`} onClick={createMarketplaceRequest} disabled={marketplaceLoading}>{marketplaceLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}Publier</Button></DialogFooter></DialogContent></Dialog>
+  </>
+
   // ============================================================
   // RENDER: CLIENT DASHBOARD
   // ============================================================
@@ -1357,6 +1449,7 @@ export default function VServiceRDC() {
       {renderClientHeader()}
       <div className="max-w-lg mx-auto px-4 -mt-6">
         {renderClientSearchSection()}
+        {renderMarketplaceSection()}
         {!hasSearched && <>{renderClientQuickAccess()}</>}
         {renderSearchResultsContent()}
       </div>
@@ -1431,6 +1524,10 @@ export default function VServiceRDC() {
   // ============================================================
   // RENDER: PRESTATAIRE DASHBOARD (CV/Portfolio Style)
   // ============================================================
+  const renderMarketplaceIncoming = () => {
+    if (user?.role !== 'PRESTATAIRE' && user?.role !== 'ENTREPRISE') return null
+    return <Card className="mb-4 border-amber-200"><CardContent className="pt-5"><div className="flex items-center justify-between mb-3"><div><h3 className={`text-sm font-semibold ${th.textPrimary}`}>Demandes disponibles</h3><p className="text-xs text-gray-500">Proposez vos services aux clients.</p></div><Badge className="bg-amber-100 text-amber-700">{marketplaceRequests.length}</Badge></div>{marketplaceRequests.length === 0 ? <p className="text-sm text-gray-400 text-center py-4">Aucune demande pour le moment.</p> : <div className="space-y-2">{marketplaceRequests.slice(0, 5).map(item => <div key={item.id} className="rounded-lg border border-gray-100 p-3"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="text-sm font-semibold truncate">{item.title}</p><p className="text-xs text-gray-500">{item.service}{item.commune ? ` · ${item.commune}` : ''}</p></div>{item.urgent && <Badge className="bg-red-100 text-red-700 text-[10px]">Urgent</Badge>}</div><p className="mt-2 text-xs text-gray-600 line-clamp-2">{item.description}</p><Button size="sm" variant="outline" className="mt-2 h-8 text-xs" onClick={async () => { const amount = prompt('Votre prix (FC) :'); if (!amount || !Number.isFinite(Number(amount))) return; try { const r = await fetch('/api/marketplace', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'quote', requestId: item.id, amount: Number(amount), idempotencyKey: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}` }) }); if (r.ok) { toast({ title: 'Proposition envoyée' }); loadMarketplace() } else toast({ title: 'Impossible d’envoyer la proposition', variant: 'destructive' }) } catch { toast({ title: 'Proposition en attente de connexion' }) } }}><Send className="h-3 w-3 mr-1" />Proposer mes services</Button></div>)}</div>}</CardContent></Card>
+  }
   const renderPrestataireDashboard = () => {
     const p = user?.profile; const status = user?.status || 'approved'
     return (<>
@@ -1521,6 +1618,7 @@ export default function VServiceRDC() {
             }}><ExternalLink className="h-4 w-4 mr-1" />Mon lien</Button>
           </div>
           {/* Reviews */}
+          {renderMarketplaceIncoming()}
           <div className="mt-4"><h2 className={`text-lg font-bold ${th.textPrimary} mb-3`}>{t('receivedReviews')}</h2>{providerDashReviews.length > 0 ? <div className="space-y-3 max-h-80 overflow-y-auto">{providerDashReviews.map(r => <Card key={r.id} className="border-gray-100"><CardContent className="p-3"><div className="flex items-center justify-between mb-1"><span className={`text-sm font-medium ${th.textPrimary}`}>{r.authorName || 'Anonyme'}</span><span className="text-xs text-gray-400">{formatDate(r.createdAt)}</span></div><div className="flex items-center gap-1 mb-1">{getStars(r.rating)}</div><p className={`text-sm ${th.textSecondary}`}>{r.comment}</p></CardContent></Card>)}</div> : <p className={`text-sm text-gray-400 text-center py-4`}>{t('noReviews')}</p>}</div>
           {/* Realisations */}
           <div className="mt-6"><div className="flex items-center justify-between mb-3"><h2 className={`text-lg font-bold ${th.textPrimary}`}>Realisations</h2><Button size="sm" className={`${th.primary} ${th.primaryText} text-xs h-7`} onClick={() => { setRealOpen(true); setRealTitle(''); setRealDesc(''); setRealMedia([]); setRealMediaType('image'); setRealBefore(''); setRealAfter(''); setRealLocation(''); setRealDate('') }}><Plus className="h-3 w-3 mr-1" />Ajouter</Button></div>
@@ -1603,6 +1701,7 @@ export default function VServiceRDC() {
             </CardContent>
           </Card>
           {/* Rating */}
+          {renderMarketplaceIncoming()}
           <div className="flex items-center gap-3 mb-4 p-3 bg-white rounded-xl shadow-sm border border-gray-100"><div className="flex items-center gap-1">{getStars(providerDashAvg)}</div><span className={`text-sm font-medium ${th.textPrimary}`}>{providerDashAvg.toFixed(1)}</span><span className={`text-sm ${th.textSecondary}`}>({providerDashCount} {t('reviews')})</span></div>
           {/* Certification */}
           <div className="mb-4 p-3 rounded-xl bg-white shadow-sm border border-blue-100"><div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><ShieldCheck className={`h-4 w-4 ${user?.certified ? 'text-[#0095F6]' : 'text-gray-400'}`} /><div><p className={`text-xs font-medium ${user?.certified ? 'text-[#0095F6]' : 'text-gray-600'}`}>{user?.certified ? 'Certifiée' : user?.certificationStatus === 'pending' ? 'En attente' : 'Non certifiée'}</p></div></div>{!user?.certified && user?.certificationStatus !== 'pending' && <Button size="sm" className="bg-[#0095F6] hover:bg-[#0095F6]/90 text-white text-xs h-7" onClick={async () => { try { const r = await fetch('/api/certification', { method: 'POST', headers: authHeaders() }); if (r.ok) { toast({ title: 'Demande envoyée' }); await fetchUserProfile() } } catch { /* */ } }}><ShieldCheck className="h-3 w-3 mr-1" />Certification</Button>}</div></div>
@@ -1703,8 +1802,10 @@ export default function VServiceRDC() {
       <div className={`bg-white border-b ${th.borderColor} px-4 py-4 sticky top-0 z-50`}><div className="max-w-lg mx-auto flex items-center gap-3"><Button variant="ghost" size="sm" onClick={() => navigate(user?.role === 'CLIENT' ? 'client-dashboard' : (user?.role === 'PRESTATAIRE' ? 'prestataire-dashboard' : 'entreprise-dashboard'))}><ChevronLeft className="h-4 w-4" /></Button><h1 className={`text-lg font-bold ${th.textPrimary}`}>{t('settings')}</h1></div></div>
       <div className="max-w-lg mx-auto px-4 py-4 space-y-6">
         <Card className={th.accentBorder}><CardContent className="pt-6"><div className="flex items-center gap-4 mb-4"><Avatar className="h-16 w-16"><AvatarImage src={user?.profile?.logo || user?.profile?.photo} /><AvatarFallback className={theme === 'red' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}>{getInitials(user?.profile?.fullName || user?.profile?.companyName || user?.phone || 'U')}</AvatarFallback></Avatar><div><h2 className={`font-semibold ${th.textPrimary}`}>{user?.profile?.fullName || user?.profile?.companyName || 'Utilisateur'}</h2><p className={`text-sm ${th.textSecondary}`}>{user?.phone}</p><Badge className={`mt-1 ${th.badgeBg} ${th.badgeText}`}>{user?.role}</Badge></div></div><Button className={`w-full ${th.primary} ${th.primaryText}`} onClick={() => navigate('profile-edit')}><Edit className="h-4 w-4 mr-1" />{t('modifyProfile')}</Button></CardContent></Card>
-        <Card><CardContent className="pt-6"><h3 className={`font-semibold ${th.textPrimary} mb-3`}>{t('changePassword')}</h3>{!showChangePass ? <Button variant="outline" className={`w-full ${th.accent} ${th.accentBorder}`} onClick={() => setShowChangePass(true)}><Key className="h-4 w-4 mr-1" />{t('changePassword')}</Button> : <div className="space-y-3"><div className="space-y-2"><Label>{t('newPassword')}</Label><Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} /></div><div className="flex gap-2"><Button className={`flex-1 ${th.primary} ${th.primaryText}`} onClick={handleChangePassword} disabled={changePassLoading}>{changePassLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}{t('save')}</Button><Button variant="outline" onClick={() => { setShowChangePass(false); setNewPassword('') }}>{t('cancel')}</Button></div></div>}</CardContent></Card>
+        <Card><CardContent className="pt-6"><h3 className={`font-semibold ${th.textPrimary} mb-3`}>{t('changePassword')}</h3>{!showChangePass ? <Button variant="outline" className={`w-full ${th.accent} ${th.accentBorder}`} onClick={() => setShowChangePass(true)}><Key className="h-4 w-4 mr-1" />{t('changePassword')}</Button> : <div className="space-y-3"><div className="space-y-2"><Label>{t('password')} actuel</Label><Input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="••••••••" /></div><div className="space-y-2"><Label>{t('newPassword')}</Label><Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 caractères" /></div><div className="flex gap-2"><Button className={`flex-1 ${th.primary} ${th.primaryText}`} onClick={handleChangePassword} disabled={changePassLoading}>{changePassLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}{t('save')}</Button><Button variant="outline" onClick={() => { setShowChangePass(false); setNewPassword(''); setCurrentPassword('') }}>{t('cancel')}</Button></div></div>}</CardContent></Card>
         <Card><CardContent className="pt-6"><h3 className={`font-semibold ${th.textPrimary} mb-3`}>{t('contactUs')}</h3><div className="space-y-3"><div className="space-y-2"><Label>{t('yourName')}</Label><Input value={contactName} onChange={e => setContactName(e.target.value)} /></div><div className="space-y-2"><Label>{t('email')}</Label><Input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} /></div><div className="space-y-2"><Label>{t('yourMessage')}</Label><Textarea value={contactMessage} onChange={e => setContactMessage(e.target.value)} rows={3} /></div><Button className={`w-full ${th.primary} ${th.primaryText}`} onClick={handleContact} disabled={contactLoading}>{contactLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}{t('send')}</Button></div></CardContent></Card>
+        <Card className="border-blue-200"><CardContent className="pt-6 space-y-4"><div><h3 className={`font-semibold ${th.textPrimary}`}>Abonnements et paiements</h3><p className={`text-xs ${th.textSecondary} mt-1`}>Numéro M-Pesa VServiceRDC : <strong>{mpesaConfig.mpesa_platform_phone}</strong>. Frais fixes : {mpesaConfig.withdrawal_fee_usd} $.</p></div><div className="grid grid-cols-1 sm:grid-cols-3 gap-2">{[{ name: 'Prestataire Pro', price: 10000, rate: '5 %' }, { name: 'Prestataire Premium', price: 20000, rate: '3 %' }, { name: 'Entreprise Basic', price: 20000, rate: '4 %' }].map(plan => <div key={plan.name} className="rounded-lg border border-gray-100 p-3"><p className="text-xs font-semibold">{plan.name}</p><p className="text-sm font-bold text-emerald-700 mt-1">{plan.price.toLocaleString('fr-FR')} FC</p><p className="text-[10px] text-gray-500">Commission : {plan.rate}</p><Button size="sm" className="w-full h-8 mt-2 text-xs" onClick={() => prepareSubscriptionPayment(plan.name, plan.price)} disabled={paymentLoading}>Préparer</Button></div>)}</div>{myPayments.length > 0 && <div className="border-t pt-3 space-y-2"><p className="text-xs font-semibold">Mes transactions</p>{myPayments.slice(0, 5).map(payment => <div key={payment.id} className="flex items-center justify-between gap-2 text-xs"><span className="truncate">{payment.purpose} · {String(payment.amount)} {payment.currency}</span><div className="flex items-center gap-2"><Badge variant="secondary" className="text-[10px]">{payment.status}</Badge>{payment.status === 'PENDING' && <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => { setProofPayment(payment); setProofAmount(String(Number(payment.amount) + Number(payment.fee || 0))) }}>Ajouter la preuve</Button>}</div></div>)}</div>}<Dialog open={Boolean(proofPayment)} onOpenChange={open => { if (!open) setProofPayment(null) }}><DialogContent><DialogHeader><DialogTitle>Preuve de paiement M-Pesa</DialogTitle><DialogDescription>Total attendu : {proofPayment ? Number(proofPayment.amount) + Number(proofPayment.fee || 0) : 0} {proofPayment?.currency || 'CDF'}.</DialogDescription></DialogHeader><div className="space-y-3"><div className="space-y-1"><Label>Référence de transaction *</Label><Input value={proofReference} onChange={e => setProofReference(e.target.value)} /></div><div className="space-y-1"><Label>Montant envoyé *</Label><Input inputMode="numeric" value={proofAmount} onChange={e => setProofAmount(e.target.value.replace(/[^0-9.]/g, ''))} /></div><div className="space-y-1"><Label>Capture JPG/PNG *</Label><label className="flex min-h-11 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-200 px-3 text-xs text-gray-500 hover:border-emerald-400"><input type="file" accept="image/jpeg,image/png" className="sr-only" onChange={e => { const file = e.target.files?.[0]; if (file) void uploadPaymentProof(file) }} />{proofUrl ? 'Preuve ajoutée' : 'Choisir une capture depuis la galerie'}</label></div></div><DialogFooter><Button variant="outline" onClick={() => setProofPayment(null)}>Annuler</Button><Button onClick={submitPaymentProof} disabled={paymentLoading}>Envoyer</Button></DialogFooter></DialogContent></Dialog></CardContent></Card>
+        <Card className="border-amber-200"><CardContent className="pt-6 space-y-3"><div><h3 className={`font-semibold ${th.textPrimary}`}>Mes coordonnées de reversement</h3><p className={`text-xs ${th.textSecondary}`}>Elles sont masquées et utilisées uniquement pour les reversements validés.</p></div><div className="space-y-2"><Select value={accountOperator} onValueChange={setAccountOperator}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['M-Pesa', 'Airtel Money', 'Afri Money', 'Orange Money', 'BANQUE'].map(operator => <SelectItem key={operator} value={operator}>{operator}</SelectItem>)}</SelectContent></Select><Input placeholder="Nom du titulaire" value={accountHolder} onChange={e => setAccountHolder(e.target.value)} /><Input placeholder={accountOperator === 'BANQUE' ? 'Numéro de compte' : '+243XXXXXXXXX'} value={accountPhone} onChange={e => setAccountPhone(e.target.value)} inputMode="tel" /><Input placeholder="Confirmer le numéro" value={accountPhoneConfirmation} onChange={e => setAccountPhoneConfirmation(e.target.value)} inputMode="tel" /><Button className={`w-full ${th.primary} ${th.primaryText}`} onClick={savePaymentAccount}>Enregistrer</Button></div>{paymentAccounts.length > 0 && <div className="border-t pt-3 space-y-2">{paymentAccounts.map(account => <div key={account.id} className="flex items-center justify-between gap-2 text-xs"><span>{account.operator} · {account.holderName} · {account.maskedPhone}</span>{account.isDefault && <Badge variant="secondary">Par défaut</Badge>}</div>)}</div>}</CardContent></Card>
         {/* Contact VServicesRDC (WhatsApp & Email) */}
         <Card className="border-emerald-200"><CardContent className="pt-6 space-y-4"><h3 className={`font-semibold ${th.textPrimary}`}>Contact VServicesRDC</h3><p className={`text-xs ${th.textSecondary}`}>Contactez directement l'équipe VServicesRDC</p><a href="https://wa.me/243990601417" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-3 p-3 rounded-lg border ${th.accentBorder} hover:bg-emerald-50 transition-colors`}><div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center"><span className="text-xl">📱</span></div><div><p className={`font-medium text-sm ${th.textPrimary}`}>WhatsApp</p><p className="text-xs text-gray-500">+243 990 601 417</p></div><ArrowRight className="h-4 w-4 text-emerald-400 ml-auto" /></a><a href="mailto:henobuild32@gmail.com" className={`flex items-center gap-3 p-3 rounded-lg border ${th.accentBorder} hover:bg-emerald-50 transition-colors`}><div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center"><span className="text-xl">📧</span></div><div><p className={`font-medium text-sm ${th.textPrimary}`}>E-mail</p><p className="text-xs text-gray-500">henobuild32@gmail.com</p></div><ArrowRight className="h-4 w-4 text-emerald-400 ml-auto" /></a></CardContent></Card>
         <Card><CardContent className="pt-6"><h3 className={`font-semibold ${th.textPrimary} mb-3`}>{t('myMessages')}</h3>{contactMessages.length > 0 ? <div className="space-y-3 max-h-64 overflow-y-auto">{contactMessages.map(m => <div key={m.id} className="p-3 rounded-lg border border-gray-100"><p className={`text-sm ${th.textSecondary}`}>{m.message}</p><p className="text-xs text-gray-400 mt-1">{formatDate(m.createdAt)}</p>{m.reply && <div className={`mt-2 p-2 ${th.alertBg} rounded ${th.accentBorder}`}><p className={`text-xs font-medium ${th.accent}`}>Réponse:</p><p className={`text-sm ${th.accent}`}>{m.reply}</p></div>}</div>)}</div> : <p className={`text-sm text-gray-400 text-center py-4`}>{t('noMessages')}</p>}</CardContent></Card>
@@ -1753,6 +1854,19 @@ export default function VServiceRDC() {
   const renderAdminDashboard = () => (
     <div className={`min-h-screen ${th.pageBg} pb-6`}>
       <SettingsFloater />
+      {user?.adminMustChangePassword && (
+        <Dialog open onOpenChange={() => {}}>
+          <DialogContent className="max-w-sm" onEscapeKeyDown={e => e.preventDefault()} onPointerDownOutside={e => e.preventDefault()}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Shield className="h-4 w-4 text-indigo-600" />Première connexion administrateur</DialogTitle>
+              <DialogDescription>Vous êtes connecté(e) avec le mot de passe partagé. Définissez votre propre mot de passe pour sécuriser l'accès — cette étape est obligatoire.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2"><Label>{t('password')} actuel</Label><div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input type="password" placeholder="••••••••" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="pl-10" /></div></div>
+            <div className="space-y-2"><Label>{t('newPassword')}</Label><div className="relative"><Key className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" /><Input type="password" placeholder="Min 6 caractères" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="pl-10" onKeyDown={e => e.key === 'Enter' && handleChangePassword()} /></div></div>
+            <Button className={`w-full ${th.primary} ${th.primaryText}`} onClick={handleChangePassword} disabled={changePassLoading}>{changePassLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}Enregistrer mon mot de passe</Button>
+          </DialogContent>
+        </Dialog>
+      )}
       <div className="bg-gradient-to-r from-indigo-700 via-purple-700 to-indigo-800 text-white px-4 pt-6 pb-8 relative overflow-hidden">
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: `radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 50%, white 1px, transparent 1px)`, backgroundSize: '30px 30px' }} />
         <div className="max-w-5xl mx-auto relative z-10">
@@ -1807,6 +1921,7 @@ export default function VServiceRDC() {
                 { id: 'certifications', icon: <ShieldCheck className="h-5 w-5" />, title: 'Certifications', desc: 'Validez les demandes de certification', count: adminCertRequests.filter(r => r.certificationStatus === 'pending').length, color: 'from-teal-500 to-teal-700', accent: 'text-teal-600 bg-teal-50' },
                 { id: 'entreprises', icon: <Building2 className="h-5 w-5" />, title: 'Entreprises', desc: 'Gerez les entreprises inscrites', count: adminUsers.filter(u => u.role === 'ENTREPRISE').length, color: 'from-sky-500 to-sky-700', accent: 'text-sky-600 bg-sky-50' },
                 { id: 'publications', icon: <Image className="h-5 w-5" />, title: 'Publications', desc: 'Moderez les realisations publiees', count: adminRealisations.length, color: 'from-fuchsia-500 to-fuchsia-700', accent: 'text-fuchsia-600 bg-fuchsia-50' },
+                { id: 'finances', icon: <Wallet className="h-5 w-5" />, title: 'Centre financier', desc: 'Paiements, escrow, commissions et litiges', count: adminFinancial.disputes?.length || 0, color: 'from-green-500 to-green-700', accent: 'text-green-600 bg-green-50' },
                 { id: 'parametres', icon: <Settings className="h-5 w-5" />, title: 'Parametres', desc: 'Reglages generaux de la plateforme', count: null, color: 'from-slate-500 to-slate-700', accent: 'text-slate-600 bg-slate-50' },
                 { id: 'historique', icon: <Clock className="h-5 w-5" />, title: 'Historique', desc: 'Traces des actions administratives', count: adminActions.length, color: 'from-gray-500 to-gray-700', accent: 'text-gray-600 bg-gray-50' },
               ].map((c) => (
@@ -1901,6 +2016,7 @@ export default function VServiceRDC() {
             {adminSection === 'certifications' && (<><Card><CardHeader className="p-3 sm:p-6"><CardTitle className="flex items-center gap-2 text-sm sm:text-base"><ShieldCheck className="h-4 w-4 text-amber-500" />Demandes de certification <Badge className="bg-amber-500 text-white text-xs">{adminCertRequests.filter(r => r.certificationStatus === 'pending').length}</Badge></CardTitle></CardHeader><CardContent className="p-3 sm:p-6 pt-0 sm:pt-0"><div className="space-y-2 max-h-[500px] overflow-y-auto">{adminCertRequests.length === 0 ? <p className="text-center text-gray-400 py-8 text-xs sm:text-sm">Aucune demande</p> : adminCertRequests.map((r: any) => (<div key={r.id} className="p-3 rounded-lg border border-gray-100"><div className="flex items-start justify-between gap-2"><div className="flex items-center gap-3 min-w-0"><Avatar className="h-8 w-8 sm:h-10 sm:w-10 shrink-0"><AvatarFallback className="text-xs bg-amber-50 text-amber-700">{getInitials(r.name)}</AvatarFallback></Avatar><div className="min-w-0"><p className="font-medium text-xs sm:text-sm truncate">{r.name}</p><p className="text-[10px] sm:text-xs text-gray-500">{r.role} · {r.sector || ''} · {r.certificationStatus === 'pending' ? 'En attente' : r.certificationStatus === 'rejected' ? 'Refusé' : r.certified ? 'Certifié' : r.certificationStatus || 'Aucune'}</p></div></div><div className="flex gap-1 shrink-0">{r.certificationStatus === 'pending' ? <Button size="sm" className="h-7 text-xs bg-emerald-600 text-white" onClick={() => { setCertActionUserId(r.id); setCertDialogAction('approve'); setCertMsg(''); setCertDialogOpen(true) }}><Check className="h-3 w-3 mr-1" />Approuver</Button> : null}{r.certificationStatus === 'pending' ? <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-200" onClick={() => { setCertActionUserId(r.id); setCertDialogAction('reject'); setCertMsg(''); setCertDialogOpen(true) }}><X className="h-3 w-3 mr-1" />Refuser</Button> : null}{r.certified ? <Button size="sm" variant="outline" className="h-7 text-xs text-amber-600 border-amber-200" onClick={() => { setCertActionUserId(r.id); setCertDialogAction('pending'); setCertMsg(''); setCertDialogOpen(true) }}><ShieldCheck className="h-3 w-3 mr-1" />Rétrograder</Button> : null}</div></div>{r.certificationMessage && <p className="mt-2 text-xs text-gray-600 bg-gray-50 p-2 rounded border border-gray-100">Message: {r.certificationMessage}</p>}</div>))}</div></CardContent></Card></>)}
             {adminSection === 'entreprises' && (<><Card><CardHeader className="p-3 sm:p-6"><CardTitle className="flex items-center gap-2 text-sm sm:text-base"><Building2 className="h-4 w-4 text-blue-600" />Gestion des Entreprises <Badge className="bg-blue-600 text-white text-xs">{adminUsers.filter(u => u.role === 'ENTREPRISE').length}</Badge></CardTitle></CardHeader><CardContent className="p-3 sm:p-6 pt-0 sm:pt-0"><div className="space-y-2 max-h-[500px] overflow-y-auto">{adminUsers.filter(u => u.role === 'ENTREPRISE').length === 0 ? <p className="text-center text-gray-400 py-8 text-xs sm:text-sm">Aucune entreprise</p> : adminUsers.filter(u => u.role === 'ENTREPRISE').map(u => (<div key={u.id} className="p-3 rounded-lg border border-gray-100"><div className="flex items-start gap-3"><Avatar className="h-10 w-10 rounded-lg flex-shrink-0"><AvatarImage src={u.profile?.logo} /><AvatarFallback className="rounded-lg bg-blue-50 text-blue-700 text-xs">{getInitials(u.profile?.companyName || 'E')}</AvatarFallback></Avatar><div className="flex-1 min-w-0"><div className="flex items-center gap-2 flex-wrap"><h4 className="font-semibold text-xs sm:text-sm truncate">{u.profile?.companyName || 'Sans nom'}</h4>{getStatusBadge(u.status, theme)}</div><p className="text-[10px] sm:text-xs text-gray-500">{u.phone} · {u.email || 'Pas d\'email'} · Secteur: {u.profile?.sector || 'Non spécifié'}</p>{u.profile?.services && u.profile.services.length > 0 && <div className="flex flex-wrap gap-1 mt-1">{u.profile.services.slice(0, 3).map((s: string) => <Badge key={s} variant="secondary" className="text-[8px]">{s}</Badge>)}</div>}</div></div><div className="flex gap-1 mt-2 border-t border-gray-50 pt-2"><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setUserDetailData(u); setUserDetailOpen(true) }}><Eye className="h-3 w-3 mr-1" />Détails</Button>{u.status !== 'suspended' ? <Button size="sm" variant="outline" className="h-7 text-xs text-amber-600 border-amber-200" onClick={() => { setSuspendUserId(u.id); setSuspendReason(''); setSuspendDialogOpen(true) }}><Ban className="h-3 w-3 mr-1" />Suspendre</Button> : <Button size="sm" variant="outline" className="h-7 text-xs text-emerald-600 border-emerald-200" onClick={() => handleAdminAction(u.id, 'activate')}><CheckCircle className="h-3 w-3 mr-1" />Réactiver</Button>}<Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { openChat(u.id, u.profile?.companyName || u.profile?.fullName, u.profile?.logo) }}><MessageSquare className="h-3 w-3 mr-1" />Contacter</Button></div></div>))}</div></CardContent></Card></>)}
             {adminSection === 'publications' && (<><Card><CardHeader className="p-3 sm:p-6"><CardTitle className="flex items-center gap-2 text-sm sm:text-base"><Image className="h-4 w-4 text-blue-500" />Moderation des publications <Badge className="bg-blue-500 text-white text-xs">{adminRealisations.length}</Badge></CardTitle></CardHeader><CardContent className="p-3 sm:p-6 pt-0 sm:pt-0"><div className="space-y-2 max-h-[500px] overflow-y-auto">{adminRealisations.length === 0 ? <p className="text-center text-gray-400 py-8 text-xs sm:text-sm">Aucune publication</p> : adminRealisations.map((r: any) => (<div key={r.id} className="p-3 rounded-lg border border-gray-100"><div className="flex items-start gap-3 min-w-0"><div className="w-16 h-16 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">{r.afterPhoto ? <img src={r.afterPhoto} alt="" className="w-full h-full object-cover" /> : r.media?.[0] ? <img src={r.media[0]} alt="" className="w-full h-full object-cover" /> : <div className="flex items-center justify-center h-full text-gray-300"><Image className="h-6 w-6" /></div>}</div><div className="flex-1 min-w-0"><p className="font-medium text-xs sm:text-sm truncate">{r.title}</p><p className="text-[10px] text-gray-500">{r.userId.slice(0, 8)}... · {formatDate(r.createdAt)}</p>{r.hidden && <Badge className="bg-amber-100 text-amber-700 text-[10px] mt-1">Masquée</Badge>}</div><Button size="sm" variant="outline" className={'text-xs h-7 ' + (r.hidden ? 'text-emerald-600 border-emerald-200' : 'text-amber-600 border-amber-200')} onClick={async () => { try { await fetch('/api/realisations', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ id: r.id, hidden: !r.hidden }) }); fetchAdminRealisations() } catch { /* */ } }}>{r.hidden ? 'Afficher' : 'Masquer'}</Button></div></div>))}</div></CardContent></Card></>)}
+            {adminSection === 'finances' && (<><div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">{[['Encaissé', adminFinancial.totals?.received], ['Commissions', adminFinancial.totals?.commissions], ['Sous escrow', adminFinancial.totals?.heldInEscrow], ['Libéré', adminFinancial.totals?.released]].map(([label, value]) => <Card key={String(label)}><CardContent className="p-3"><p className="text-[10px] text-gray-500">{label}</p><p className="text-sm sm:text-lg font-bold text-emerald-700 break-words">{Number(value || 0).toLocaleString('fr-FR')} FC</p></CardContent></Card>)}</div><Card><CardHeader className="p-3 sm:p-6"><CardTitle className="text-sm sm:text-base">Paiements et fonds sous escrow</CardTitle></CardHeader><CardContent className="p-3 sm:p-6 pt-0 sm:pt-0"><div className="space-y-2 max-h-[500px] overflow-y-auto">{(adminFinancial.payments || []).map((payment: any) => <div key={payment.id} className="rounded-lg border border-gray-100 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-semibold break-all">{payment.purpose} · {String(payment.amount)} {payment.currency}</p><div className="flex flex-wrap items-center gap-2"><Badge variant="secondary" className="text-[10px]">{payment.status}</Badge>{payment.status === 'PENDING_VERIFICATION' && <><Button size="sm" className="h-7 text-[10px] bg-emerald-600 text-white" onClick={() => handlePaymentReview(payment.id, 'VALIDATE')}>Valider</Button><Button size="sm" variant="outline" className="h-7 text-[10px] text-red-600" onClick={() => handlePaymentReview(payment.id, 'REJECT')}>Rejeter</Button></>}</div></div><p className="text-[10px] text-gray-500 mt-1">Payeur : {payment.payer?.phone || '-'} · Bénéficiaire : {payment.beneficiary?.phone || '-'}</p><p className="text-[10px] text-gray-500">Frais : {String(payment.fee)} · Commission : {String(payment.commission)} · Référence : {payment.transactionReference || '-'}</p>{payment.proofUrl && <a href={payment.proofUrl} target="_blank" rel="noreferrer" className="text-[10px] text-blue-600 underline">Voir la preuve</a>}</div>)}{(adminFinancial.payments || []).length === 0 && <p className="text-center text-gray-400 py-8 text-sm">Aucun paiement enregistré</p>}</div><div className="mt-4 border-t pt-4"><p className="text-xs font-semibold mb-2">Litiges ouverts</p>{(adminFinancial.disputes || []).length === 0 ? <p className="text-xs text-gray-400">Aucun litige ouvert.</p> : (adminFinancial.disputes || []).map((dispute: any) => <div key={dispute.id} className="rounded border border-red-100 bg-red-50 p-2 mb-2 text-xs"><b>{dispute.reason}</b><p className="mt-1">{dispute.description}</p></div>)}</div></CardContent></Card></>) }
             {adminSection === 'parametres' && (<><Card><CardHeader className="p-3 sm:p-6"><CardTitle className="text-sm sm:text-base">Paramètres généraux</CardTitle></CardHeader><CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0 sm:pt-0">
           <div className="space-y-1 sm:space-y-2"><Label className="text-xs sm:text-sm">Message d'accueil</Label><Textarea value={settingsWelcome} onChange={e => setSettingsWelcome(e.target.value)} rows={3} className="text-xs sm:text-sm" /><Button size="sm" className="text-xs h-7 sm:h-8 mt-1" onClick={() => handleSaveSetting('welcome_message', settingsWelcome)} disabled={settingsLoading}>Enregistrer</Button></div>
           <div className="space-y-1 sm:space-y-2"><Label className="text-xs sm:text-sm">Email de contact</Label><Input type="email" value={settingsContactEmail} onChange={e => setSettingsContactEmail(e.target.value)} className="text-xs sm:text-sm h-8 sm:h-9" /><Button size="sm" className="text-xs h-7 sm:h-8 mt-1" onClick={() => handleSaveSetting('contact_email', settingsContactEmail)} disabled={settingsLoading}>Enregistrer</Button></div>

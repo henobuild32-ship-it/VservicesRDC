@@ -52,5 +52,9 @@ export function formatPhoneInput(value: string): string {
   return cleaned;
 }
 
-const ADMIN_DEFAULT_PASSWORD = 'Azerty89H$$';
-export { ADMIN_DEFAULT_PASSWORD };
+// Mot de passe admin partagé : defini uniquement en variable d'env (jamais dans le code).
+// Il ne sert qu'a creer le compte admin la premiere fois et a detecter
+// que l'admin n'a pas encore change son mot de passe.
+export function getAdminPassword(): string {
+  return process.env.ADMIN_PASSWORD || '';
+}

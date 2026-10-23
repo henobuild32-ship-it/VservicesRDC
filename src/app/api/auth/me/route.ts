@@ -113,6 +113,7 @@ export async function GET(req: NextRequest) {
       certificationMessage: user.certificationMessage || null,
       deletionReason: user.deletionReason || null,
       deletionRequestedAt: user.deletionRequestedAt || null,
+      adminMustChangePassword: user.adminMustChangePassword || false,
       profile: mapProfile(user),
       suspensionMessage,
     });
