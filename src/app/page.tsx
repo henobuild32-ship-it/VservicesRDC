@@ -528,7 +528,14 @@ export default function VServiceRDC() {
     try {
       const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: formatPhone(loginPhone), password: loginPassword }) })
       const d = await r.json()
-      if (r.ok) applyAuthSuccess(d)
+      if (r.ok && d.requiresOtp) {
+        setLoginEmail(d.email || '')
+        setLoginMethod('email')
+        setLoginOtp('')
+        setOtpSent(true)
+        setOtpResendIn(60)
+        toast({ title: 'Code envoyé', description: 'Consultez votre boîte Gmail pour terminer la connexion.' })
+      } else if (r.ok && d.token) applyAuthSuccess(d)
       else toast({ title: 'Erreur', description: d.message || d.error || 'Identifiants incorrects.', variant: 'destructive' })
     } catch { toast({ title: 'Erreur', description: 'Erreur serveur.', variant: 'destructive' }) }
     setLoginLoading(false)

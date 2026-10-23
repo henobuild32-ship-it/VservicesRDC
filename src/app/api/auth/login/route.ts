@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyPassword, hashPassword, getAdminPassword } from '@/lib/auth';
 import { createSession } from '@/lib/session';
+import { issueOtp } from '@/lib/otp';
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -119,25 +120,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Votre compte a été suspendu. Contactez l\'administration.', suspended: true }, { status: 403 });
     }
 
-    const token = createSession(user.id, user.role);
-
-    // Log activity
-    await db.userActivity.create({
-      data: { userId: user.id, action: 'login', details: JSON.stringify({ ip, time: new Date().toISOString() }) },
-    });
+    // Le mot de passe ne suffit jamais à ouvrir une session. Le code Gmail
+    // est envoyé ici afin que le parcours téléphone passe aussi par l'OTP.
+    const otp = await issueOtp(user, 'login');
+    if (!otp.ok) return NextResponse.json({ error: otp.error }, { status: otp.status });
 
     return NextResponse.json({
-      user: {
-        id: user.id,
-        phone: user.phone,
-        email: user.email,
-        role: user.role,
-        status: user.status,
-        clientProfile: user.clientProfile,
-        providerProfile: user.providerProfile,
-        companyProfile: user.companyProfile,
-      },
-      token,
+      requiresOtp: true,
+      email: user.email,
+      expiresIn: 600,
     });
   } catch (error) {
     console.error('Login error:', error);
