@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.action === 'payment') {
+    if (body.purpose === 'SUBSCRIPTION' && session.role === 'CLIENT') return jsonError('Les clients ne paient pas d’abonnement', 403)
     if (body.amount == null) return jsonError('Montant requis')
     const existing = await db.payment.findUnique({ where: { idempotencyKey } })
     if (existing) return NextResponse.json({ payment: existing, duplicate: true })

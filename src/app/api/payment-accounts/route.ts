@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const current = session(req); if (!current) return fail('Connexion requise', 401)
+  if (current.role !== 'PRESTATAIRE' && current.role !== 'ENTREPRISE') return fail('Seuls les prestataires et entreprises enregistrent des coordonnées de reversement', 403)
   const body = await req.json().catch(() => ({}))
   const operator = String(body.operator || '').trim()
   const phone = String(body.phone || '').trim()
